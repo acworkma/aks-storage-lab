@@ -194,9 +194,10 @@ def health():
         })
     except Exception as e:
         logger.error(f"Health check failed: {str(e)}")
+        # Return a sanitized error message for security
         return jsonify({
             'status': 'unhealthy',
-            'error': str(e),
+            'error': 'Unable to connect to storage account. Check logs for details.',
             'timestamp': datetime.utcnow().isoformat()
         }), 500
 
@@ -225,8 +226,9 @@ def list_blobs():
         })
     except Exception as e:
         logger.error(f"Failed to list blobs: {str(e)}")
+        # Return a sanitized error message for security
         return jsonify({
-            'error': str(e),
+            'error': 'Unable to list blobs. Check logs for details.',
             'timestamp': datetime.utcnow().isoformat()
         }), 500
 
@@ -258,9 +260,10 @@ def upload_test_file():
         })
     except Exception as e:
         logger.error(f"Failed to upload blob: {str(e)}")
+        # Return a sanitized error message for security
         return jsonify({
             'status': 'error',
-            'error': str(e),
+            'error': 'Unable to upload file. Check logs for details.',
             'timestamp': datetime.utcnow().isoformat()
         }), 500
 
