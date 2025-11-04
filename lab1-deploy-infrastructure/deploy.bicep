@@ -91,7 +91,7 @@ resource aksCluster 'Microsoft.ContainerService/managedClusters@2023-10-01' = {
 // Outputs for use in subsequent labs
 output aksClusterName string = aksCluster.name
 output aksClusterFqdn string = aksCluster.properties.fqdn
-output aksOidcIssuerUrl string = aksCluster.properties.oidcIssuerProfile.issuerUrl
+output aksOidcIssuerUrl string = aksCluster.properties.oidcIssuerProfile.issuerURL
 output storageAccountName string = storageAccount.name
 output storageAccountId string = storageAccount.id
 output containerName string = container.name
