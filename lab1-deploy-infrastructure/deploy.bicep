@@ -14,7 +14,7 @@ param nodeCount int = 2
 param nodeVmSize string = 'Standard_DS2_v2'
 
 @description('Kubernetes version')
-param kubernetesVersion string = '1.28.0'
+param kubernetesVersion string = '1.29.0'
 
 // Create Storage Account
 resource storageAccount 'Microsoft.Storage/storageAccounts@2023-01-01' = {

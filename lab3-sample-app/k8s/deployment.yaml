@@ -1,3 +1,14 @@
+# AKS Storage Lab - Kubernetes Deployment
+# 
+# QUICK START: This deployment uses an inline installation approach that installs
+# Python packages at pod startup. This means:
+# - No need to build/push a Docker image initially
+# - Pod startup takes 30-60 seconds (one-time per pod)
+# - Perfect for learning and testing the lab
+#
+# PRODUCTION: For faster startup and production use, build the Docker image from
+# app/Dockerfile and update the image reference below. See BUILD.md for details.
+#
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -18,10 +29,12 @@ spec:
       serviceAccountName: workload-identity-sa  # Use the service account from Lab 2
       containers:
       - name: app
-        # TODO: Build and push the Docker image from app/Dockerfile
-        # Then replace this with your image:
+        # QUICK START OPTION: This uses an inline approach for fast testing without building images
+        # Pod startup takes ~30-60 seconds due to package installation
+        # For production or faster startup, build and use the Dockerfile in app/ (see BUILD.md)
+        # TODO: Build and push the Docker image from app/Dockerfile, then replace with:
         # image: <your-acr-name>.azurecr.io/aks-storage-app:v1
-        # For now, using a placeholder - see Lab 3 README for build instructions
+        # and remove the 'command:' section below
         image: python:3.11-slim
         command: 
           - /bin/sh
@@ -68,7 +81,7 @@ spec:
           name: http
         env:
         - name: AZURE_STORAGE_ACCOUNT_NAME
-          value: "<your-storage-account-name>"  # UPDATE THIS
+          value: "<your-storage-account-name>"  # REQUIRED: Update with your storage account name
         - name: AZURE_STORAGE_CONTAINER_NAME
           value: "data"
         # These are automatically injected by workload identity

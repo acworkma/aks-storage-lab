@@ -12,7 +12,7 @@ AKS_CLUSTER_NAME="aks-storage-cluster"
 STORAGE_ACCOUNT_NAME="aksstorage$(openssl rand -hex 4)"
 NODE_COUNT=2
 NODE_VM_SIZE="Standard_DS2_v2"
-KUBERNETES_VERSION="1.28.0"
+KUBERNETES_VERSION="1.29.0"
 
 echo "============================================"
 echo "AKS Storage Lab - Infrastructure Deployment"
