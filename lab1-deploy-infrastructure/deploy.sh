@@ -124,8 +124,9 @@ echo "Kubelet Identity Client ID: $KUBELET_IDENTITY"
 echo ""
 
 # Write outputs to .env file for later labs
-OUTPUT_FILE="${OUTPUT_FILE:-lab1-outputs.env}"
+OUTPUT_FILE="${OUTPUT_FILE:-../lab-outputs.env}"
 cat > "$OUTPUT_FILE" <<EOF
+# Lab 1 outputs - Infrastructure deployment
 RESOURCE_GROUP=$RESOURCE_GROUP
 AKS_CLUSTER_NAME=$AKS_CLUSTER_NAME
 STORAGE_ACCOUNT_NAME=$STORAGE_ACCOUNT_NAME

@@ -5,11 +5,19 @@
 
 set -e  # Exit on error
 
-# Variables - Customize these values to match your Lab 1 deployment
-RESOURCE_GROUP="rg-aks-storage-lab"
-LOCATION="westus3"
-AKS_CLUSTER_NAME="aks-storage-cluster"
-STORAGE_ACCOUNT_NAME="<your-storage-account-name>"  # Update this from Lab 1 output!
+
+
+# Source outputs from Lab 1
+LAB1_ENV="../lab-outputs.env"
+if [ -f "$LAB1_ENV" ]; then
+    set -a
+    source "$LAB1_ENV"
+    set +a
+else
+    echo "Error: $LAB1_ENV not found. Please run Lab 1 deployment first."
+    exit 1
+fi
+# Additional variables for this lab
 MANAGED_IDENTITY_NAME="id-aks-storage"
 SERVICE_ACCOUNT_NAMESPACE="default"
 SERVICE_ACCOUNT_NAME="workload-identity-sa"
@@ -91,11 +99,31 @@ echo "  Storage Account ID: $STORAGE_ACCOUNT_ID"
 echo ""
 
 echo "Step 5: Assigning Storage Blob Data Contributor role..."
-az role assignment create \
-  --role "Storage Blob Data Contributor" \
-  --assignee "$USER_ASSIGNED_CLIENT_ID" \
-  --scope "$STORAGE_ACCOUNT_ID" \
-  --output table
+
+# Retry loop for role assignment (wait for service principal propagation)
+MAX_RETRIES=10
+SLEEP_SECONDS=10
+for ((i=1; i<=MAX_RETRIES; i++)); do
+  set +e
+  az role assignment create \
+    --role "Storage Blob Data Contributor" \
+    --assignee "$USER_ASSIGNED_CLIENT_ID" \
+    --scope "$STORAGE_ACCOUNT_ID" \
+    --output table
+  STATUS=$?
+  set -e
+  if [ $STATUS -eq 0 ]; then
+    echo "Role assignment succeeded."
+    break
+  else
+    echo "Role assignment failed (attempt $i/$MAX_RETRIES). Waiting $SLEEP_SECONDS seconds and retrying..."
+    sleep $SLEEP_SECONDS
+  fi
+  if [ $i -eq $MAX_RETRIES ]; then
+    echo "ERROR: Role assignment failed after $MAX_RETRIES attempts."
+    exit 1
+  fi
+done
 
 echo ""
 echo "Step 6: Creating Kubernetes Service Account..."
@@ -151,6 +179,19 @@ echo "AZURE_STORAGE_ACCOUNT_NAME=$STORAGE_ACCOUNT_NAME"
 echo "AZURE_CLIENT_ID=$USER_ASSIGNED_CLIENT_ID"
 echo "SERVICE_ACCOUNT_NAME=$SERVICE_ACCOUNT_NAME"
 echo ""
+
+# Append Lab 2 outputs to the shared .env file
+LAB_ENV="../lab-outputs.env"
+echo "" >> "$LAB_ENV"
+echo "# Lab 2 outputs - Managed Identity configuration" >> "$LAB_ENV"
+echo "AZURE_CLIENT_ID=$USER_ASSIGNED_CLIENT_ID" >> "$LAB_ENV"
+echo "SERVICE_ACCOUNT_NAME=$SERVICE_ACCOUNT_NAME" >> "$LAB_ENV"
+echo "SERVICE_ACCOUNT_NAMESPACE=$SERVICE_ACCOUNT_NAMESPACE" >> "$LAB_ENV"
+echo "MANAGED_IDENTITY_NAME=$MANAGED_IDENTITY_NAME" >> "$LAB_ENV"
+echo ""
+echo "Lab 2 outputs appended to $LAB_ENV"
+echo ""
+
 echo "Note: Workload identity may take a few minutes to fully propagate."
 echo ""
 echo "Next step: Proceed to Lab 3 to deploy the sample application"
