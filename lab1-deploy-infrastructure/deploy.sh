@@ -6,8 +6,8 @@
 set -e  # Exit on error
 
 # Variables - Customize these values
-RESOURCE_GROUP="rg-aks-storage-lab"
-LOCATION="eastus"
+RESOURCE_GROUP="rg-aks-storage-lab-wus3"
+LOCATION="westus3"
 AKS_CLUSTER_NAME="aks-storage-cluster"
 STORAGE_ACCOUNT_NAME="aksstorage$(openssl rand -hex 4)"
 NODE_COUNT=2
@@ -121,6 +121,19 @@ echo ""
 # Get Kubelet Identity
 KUBELET_IDENTITY=$(az aks show -n "$AKS_CLUSTER_NAME" -g "$RESOURCE_GROUP" --query 'identityProfile.kubeletidentity.clientId' -o tsv)
 echo "Kubelet Identity Client ID: $KUBELET_IDENTITY"
+echo ""
+
+# Write outputs to .env file for later labs
+OUTPUT_FILE="${OUTPUT_FILE:-lab1-outputs.env}"
+cat > "$OUTPUT_FILE" <<EOF
+RESOURCE_GROUP=$RESOURCE_GROUP
+AKS_CLUSTER_NAME=$AKS_CLUSTER_NAME
+STORAGE_ACCOUNT_NAME=$STORAGE_ACCOUNT_NAME
+OIDC_ISSUER_URL=$OIDC_ISSUER
+KUBELET_IDENTITY_CLIENT_ID=$KUBELET_IDENTITY
+EOF
+echo "Outputs written to $OUTPUT_FILE"
+echo "You can source it with: export $(grep -v '^#' $OUTPUT_FILE | xargs)"
 echo ""
 
 echo "Next step: Proceed to Lab 2 to configure managed identity"

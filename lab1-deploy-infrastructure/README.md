@@ -35,12 +35,13 @@ Create a variables file or export environment variables:
 
 ```bash
 # Set your preferred values
-export RESOURCE_GROUP="rg-aks-storage-lab"
-export LOCATION="eastus"
+export RESOURCE_GROUP="rg-aks-storage-lab-wus3"
+export LOCATION="westus3"
 export AKS_CLUSTER_NAME="aks-storage-cluster"
 export STORAGE_ACCOUNT_NAME="aksstorage$(openssl rand -hex 4)"
 export NODE_COUNT=2
 ```
+
 
 **Note:** The storage account name must be globally unique, lowercase, and contain only alphanumeric characters.
 
