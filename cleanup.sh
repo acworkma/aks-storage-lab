@@ -10,9 +10,9 @@ echo "AKS Storage Lab - Cleanup Script"
 echo "============================================"
 echo ""
 echo "This script will remove ALL resources created during the labs:"
-echo "  - Kubernetes deployments and services (Lab 3)"
+echo "  - Kubernetes deployments and services (Lab 3 & Lab 4)"
 echo "  - Managed identities and role assignments (Lab 2)"
-echo "  - AKS cluster, Storage Account, and Resource Group (Lab 1)"
+echo "  - AKS cluster, Storage Account, Container Registry, and Resource Group (Labs 1 & 4)"
 echo ""
 
 # Check if lab-outputs.env exists
@@ -48,10 +48,13 @@ az account show &> /dev/null || {
 
 echo ""
 echo "Resources to be deleted:"
-echo "  Resource Group: ${RESOURCE_GROUP:-<not set>}"
-echo "  AKS Cluster: ${AKS_CLUSTER_NAME:-<not set>}"
-echo "  Storage Account: ${STORAGE_ACCOUNT_NAME:-<not set>}"
-echo "  Managed Identity: ${MANAGED_IDENTITY_NAME:-<not set>}"
+echo "  Resource Group:      ${RESOURCE_GROUP:-<not set>}"
+echo "  AKS Cluster:         ${AKS_CLUSTER_NAME:-<not set>}"
+echo "  Storage Account:     ${STORAGE_ACCOUNT_NAME:-<not set>}"
+echo "  Managed Identity:    ${MANAGED_IDENTITY_NAME:-<not set>}"
+echo "  Python Deployment:   ${APP_DEPLOYMENT_NAME:-aks-storage-app} (Service: ${APP_SERVICE_NAME:-aks-storage-app-service})"
+echo "  Scala Deployment:    ${SCALA_APP_DEPLOYMENT_NAME:-aks-storage-app-scala} (Service: ${SCALA_APP_SERVICE_NAME:-aks-storage-app-scala-service})"
+echo "  Azure Container Reg: ${ACR_NAME:-<not set>}"
 echo ""
 
 # Confirmation prompt
@@ -67,7 +70,7 @@ echo ""
 
 # Lab 3: Clean up Kubernetes resources
 echo "============================================"
-echo "Lab 3: Cleaning up Kubernetes resources..."
+echo "Lab 3 & Lab 4: Cleaning up Kubernetes resources..."
 echo "============================================"
 echo ""
 
@@ -75,23 +78,33 @@ echo ""
 if command -v kubectl &> /dev/null; then
     # Check if we're connected to the cluster
     if kubectl cluster-info &> /dev/null; then
-        echo "Step 1: Deleting Kubernetes deployment and service..."
+    echo "Step 1: Deleting Kubernetes deployments and services..."
         
-        # Delete the application deployment
+        # Delete Python sample app (Lab 3)
         if kubectl get deployment "${APP_DEPLOYMENT_NAME:-aks-storage-app}" -n "${APP_NAMESPACE:-default}" &> /dev/null; then
-            kubectl delete deployment "${APP_DEPLOYMENT_NAME:-aks-storage-app}" -n "${APP_NAMESPACE:-default}" || echo "  Deployment already deleted or not found"
+            kubectl delete deployment "${APP_DEPLOYMENT_NAME:-aks-storage-app}" -n "${APP_NAMESPACE:-default}" || echo "  Python deployment already deleted or not found"
         else
-            echo "  Deployment not found (already deleted or never created)"
+            echo "  Python deployment not found (already deleted or never created)"
         fi
-        
-        # Delete the application service
         if kubectl get service "${APP_SERVICE_NAME:-aks-storage-app-service}" -n "${APP_NAMESPACE:-default}" &> /dev/null; then
-            kubectl delete service "${APP_SERVICE_NAME:-aks-storage-app-service}" -n "${APP_NAMESPACE:-default}" || echo "  Service already deleted or not found"
+            kubectl delete service "${APP_SERVICE_NAME:-aks-storage-app-service}" -n "${APP_NAMESPACE:-default}" || echo "  Python service already deleted or not found"
         else
-            echo "  Service not found (already deleted or never created)"
+            echo "  Python service not found (already deleted or never created)"
+        fi
+
+        # Delete Scala app (Lab 4)
+        if kubectl get deployment "${SCALA_APP_DEPLOYMENT_NAME:-aks-storage-app-scala}" -n "${SCALA_APP_NAMESPACE:-default}" &> /dev/null; then
+            kubectl delete deployment "${SCALA_APP_DEPLOYMENT_NAME:-aks-storage-app-scala}" -n "${SCALA_APP_NAMESPACE:-default}" || echo "  Scala deployment already deleted or not found"
+        else
+            echo "  Scala deployment not found (already deleted or never created)"
+        fi
+        if kubectl get service "${SCALA_APP_SERVICE_NAME:-aks-storage-app-scala-service}" -n "${SCALA_APP_NAMESPACE:-default}" &> /dev/null; then
+            kubectl delete service "${SCALA_APP_SERVICE_NAME:-aks-storage-app-scala-service}" -n "${SCALA_APP_NAMESPACE:-default}" || echo "  Scala service already deleted or not found"
+        else
+            echo "  Scala service not found (already deleted or never created)"
         fi
         
-        # Delete the service account
+    # Delete the workload identity service account
         if kubectl get serviceaccount "${SERVICE_ACCOUNT_NAME:-workload-identity-sa}" -n "${SERVICE_ACCOUNT_NAMESPACE:-default}" &> /dev/null; then
             kubectl delete serviceaccount "${SERVICE_ACCOUNT_NAME:-workload-identity-sa}" -n "${SERVICE_ACCOUNT_NAMESPACE:-default}" || echo "  Service account already deleted or not found"
         else
@@ -180,14 +193,30 @@ echo ""
 
 # Lab 1: Clean up Azure Infrastructure
 echo "============================================"
-echo "Lab 1: Cleaning up Azure Infrastructure..."
+echo "Lab 1 & Lab 4: Cleaning up Azure Infrastructure..."
 echo "============================================"
 echo ""
 
 if [ -n "$RESOURCE_GROUP" ]; then
+    # Optional: Delete ACR first (if user confirms and ACR_NAME present)
+    if [ -n "$ACR_NAME" ]; then
+        if az acr show -n "$ACR_NAME" -g "$RESOURCE_GROUP" &> /dev/null; then
+            echo "Found Azure Container Registry: $ACR_NAME"
+            read -p "Delete ACR '$ACR_NAME' before deleting the resource group? (yes/no): " DELETE_ACR
+            if [ "$DELETE_ACR" = "yes" ]; then
+                echo "Deleting ACR $ACR_NAME..."
+                az acr delete -n "$ACR_NAME" -g "$RESOURCE_GROUP" --yes || echo "  Failed to delete ACR or already removed"
+            else
+                echo "Skipping explicit ACR deletion (it will be deleted with the resource group)."
+            fi
+        else
+            echo "ACR $ACR_NAME not found (may already be deleted)."
+        fi
+    fi
+
     # Check if resource group exists
     if az group show --name "$RESOURCE_GROUP" &> /dev/null; then
-        echo "Step 5: Deleting entire Resource Group (includes AKS cluster and Storage Account)..."
+        echo "Step 5: Deleting entire Resource Group (includes AKS cluster, Storage Account, and any remaining registry)..."
         echo "  This may take several minutes..."
         
         az group delete \
@@ -213,9 +242,9 @@ echo "Cleanup Complete!"
 echo "============================================"
 echo ""
 echo "Summary:"
-echo "  ✓ Lab 3: Kubernetes resources removed"
+echo "  ✓ Lab 3 & Lab 4: Kubernetes resources removed"
 echo "  ✓ Lab 2: Managed identity and role assignments removed"
-echo "  ✓ Lab 1: Resource group deletion initiated"
+echo "  ✓ Lab 1 & Lab 4: Resource group deletion initiated"
 echo ""
 echo "Note: Azure resource deletion runs asynchronously and may take"
 echo "several minutes to complete. You can check the status with:"
