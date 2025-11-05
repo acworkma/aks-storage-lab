@@ -12,7 +12,10 @@ AKS_CLUSTER_NAME="aks-storage-cluster"
 STORAGE_ACCOUNT_NAME="aksstorage$(openssl rand -hex 4)"
 NODE_COUNT=2
 NODE_VM_SIZE="Standard_DS2_v2"
-KUBERNETES_VERSION="1.29.0"
+# Kubernetes version: auto-detect latest stable if not overridden
+if [[ -z "${KUBERNETES_VERSION}" ]]; then
+  KUBERNETES_VERSION=$(az aks get-versions -l "$LOCATION" --query "values[?isPreview==null].patchVersions | [].keys(@)[]" -o tsv | sort -V | tail -n1 || echo "1.33.3")
+fi
 
 echo "============================================"
 echo "AKS Storage Lab - Infrastructure Deployment"
@@ -24,6 +27,8 @@ echo "  Location: $LOCATION"
 echo "  AKS Cluster: $AKS_CLUSTER_NAME"
 echo "  Storage Account: $STORAGE_ACCOUNT_NAME"
 echo "  Node Count: $NODE_COUNT"
+echo "  Node VM Size: $NODE_VM_SIZE"
+echo "  Kubernetes Version: $KUBERNETES_VERSION"
 echo ""
 
 # Check if Azure CLI is installed
@@ -82,7 +87,7 @@ az aks create \
   --enable-oidc-issuer \
   --network-plugin azure \
   --network-policy azure \
-  --generate-ssh-keys \
+  --no-ssh-key \
   --output table
 
 echo ""
