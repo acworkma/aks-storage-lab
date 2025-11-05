@@ -120,7 +120,7 @@ if [ -n "$RESOURCE_GROUP" ] && [ -n "$MANAGED_IDENTITY_NAME" ]; then
     # Check if resource group exists
     if az group show --name "$RESOURCE_GROUP" &> /dev/null; then
         # Check if managed identity exists
-        if az identity show --name "$MANAGED_IDENTITY_NAME" --resource-group "$RESOURCE_GROUP" &> /dev/null 2>&1; then
+        if az identity show --name "$MANAGED_IDENTITY_NAME" --resource-group "$RESOURCE_GROUP" &> /dev/null; then
             echo "Step 2: Deleting federated identity credentials..."
             # List and delete federated credentials
             FEDERATED_CREDS=$(az identity federated-credential list \
