@@ -6,8 +6,9 @@ This hands-on lab demonstrates how to deploy Azure Kubernetes Service (AKS) and 
 
 In this lab, you will:
 - Deploy Azure infrastructure including an AKS cluster and Storage Account
-- Configure managed identity for secure access between AKS and Azure Storage
-- Deploy a sample Python application to validate the connection
+- Configure managed identity / workload identity for secure access between AKS and Azure Storage
+- Deploy a sample Python application to validate secure blob access
+- (Optional) Deploy a Scala Akka HTTP application with automated Azure Container Registry (ACR) integration (Lab 4)
 
 ## Prerequisites
 
@@ -20,7 +21,7 @@ Before starting this lab, you should have:
 
 ## Lab Structure
 
-This lab is divided into three parts:
+This lab is divided into four parts:
 
 ### [Lab 1: Deploy Azure Infrastructure](./lab1-deploy-infrastructure/)
 Deploy the necessary Azure resources including:
@@ -45,6 +46,15 @@ Deploy and validate a Python application that:
 - Shows best practices for cloud-native applications
 
 **Duration:** ~20 minutes
+
+### [Lab 4: Scala Application with ACR](./lab4-scala-app/)
+Extend the scenario with a production-style Scala (Akka HTTP) application:
+- Uses `DefaultAzureCredential` with AKS Workload Identity
+- Implements endpoints: `/`, `/health`, `/list`, `/upload`
+- Automatically builds image, provisions ACR (if missing), pushes image, and attaches ACR to the AKS cluster
+- Demonstrates multi-stage Docker build and registry-driven deployment
+
+**Duration:** ~30–40 minutes (first build + deploy)
 
 ## Getting Started
 
@@ -86,7 +96,7 @@ Deploy and validate a Python application that:
 
 ## Clean Up
 
-After completing the labs, remember to delete the Azure resources to avoid unnecessary charges.
+After completing the labs, remember to delete the Azure resources to avoid unnecessary charges. If you ran Lab 4, an Azure Container Registry may also exist.
 
 ### Automated Cleanup (Recommended)
 
@@ -97,18 +107,26 @@ Use the provided cleanup script to remove all resources created during the labs:
 ```
 
 This script will:
-- Remove Kubernetes deployments and services (Lab 3)
+- Remove Kubernetes deployments and services (Lab 3 + Lab 4)
 - Delete managed identities and role assignments (Lab 2)
-- Delete the entire resource group including AKS cluster and Storage Account (Lab 1)
+- Delete the entire resource group including AKS cluster, Storage Account, and ACR (Labs 1 & 4)
 
 The script automatically reads from `lab-outputs.env` if available, or prompts for the resource group name.
 
 ### Manual Cleanup
 
-Alternatively, you can manually delete the resource group:
-
+If you prefer manual deletion:
 ```bash
 az group delete --name <resource-group-name> --yes --no-wait
+```
+If you only want to remove the Scala deployment and keep the rest:
+```bash
+kubectl delete deployment aks-storage-app-scala
+kubectl delete service aks-storage-app-scala-service
+```
+Optionally delete ACR (only if not reused):
+```bash
+az acr delete -n <acr-name> -g <resource-group-name>
 ```
 
 ## Additional Resources
