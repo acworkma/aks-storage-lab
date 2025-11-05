@@ -86,7 +86,26 @@ Deploy and validate a Python application that:
 
 ## Clean Up
 
-After completing the labs, remember to delete the Azure resources to avoid unnecessary charges:
+After completing the labs, remember to delete the Azure resources to avoid unnecessary charges.
+
+### Automated Cleanup (Recommended)
+
+Use the provided cleanup script to remove all resources created during the labs:
+
+```bash
+./cleanup.sh
+```
+
+This script will:
+- Remove Kubernetes deployments and services (Lab 3)
+- Delete managed identities and role assignments (Lab 2)
+- Delete the entire resource group including AKS cluster and Storage Account (Lab 1)
+
+The script automatically reads from `lab-outputs.env` if available, or prompts for the resource group name.
+
+### Manual Cleanup
+
+Alternatively, you can manually delete the resource group:
 
 ```bash
 az group delete --name <resource-group-name> --yes --no-wait
