@@ -7,9 +7,9 @@ set -e  # Exit on error
 
 # Variables - Customize these values to match your Lab 1 deployment
 RESOURCE_GROUP="rg-aks-storage-lab"
-LOCATION="eastus"
+LOCATION="westus3"
 AKS_CLUSTER_NAME="aks-storage-cluster"
-STORAGE_ACCOUNT_NAME="<your-storage-account-name>"  # Update this!
+STORAGE_ACCOUNT_NAME="<your-storage-account-name>"  # Update this from Lab 1 output!
 MANAGED_IDENTITY_NAME="id-aks-storage"
 SERVICE_ACCOUNT_NAMESPACE="default"
 SERVICE_ACCOUNT_NAME="workload-identity-sa"
