@@ -4,10 +4,18 @@
 
 set -e  # Exit on error
 
-# Variables - Update these to match your environment
-RESOURCE_GROUP="rg-aks-storage-lab"
-STORAGE_ACCOUNT_NAME="<your-storage-account-name>"  # UPDATE THIS
-SERVICE_ACCOUNT_NAME="workload-identity-sa"
+# Source outputs from previous labs
+LAB_ENV="../lab-outputs.env"
+if [ -f "$LAB_ENV" ]; then
+    set -a
+    source "$LAB_ENV"
+    set +a
+else
+    echo "Error: $LAB_ENV not found. Please run Lab 1 and Lab 2 first."
+    exit 1
+fi
+
+# Additional variables for this lab
 CONTAINER_NAME="data"
 APP_IMAGE="mcr.microsoft.com/azuredocs/aks-helloworld:v1"  # Placeholder - replace with actual image
 
@@ -15,14 +23,6 @@ echo "================================================"
 echo "AKS Storage Lab - Deploy Sample Application"
 echo "================================================"
 echo ""
-
-# Check if storage account name is still placeholder
-if [ "$STORAGE_ACCOUNT_NAME" == "<your-storage-account-name>" ]; then
-    echo "Error: Please update STORAGE_ACCOUNT_NAME in this script"
-    echo "You can find it by running:"
-    echo "  az storage account list -g $RESOURCE_GROUP --query '[0].name' -o tsv"
-    exit 1
-fi
 
 echo "Configuration:"
 echo "  Storage Account: $STORAGE_ACCOUNT_NAME"
@@ -38,62 +38,10 @@ fi
 
 echo "Step 1: Updating deployment manifest with storage account name..."
 
-# Create a temporary deployment file with updated values
-cat > /tmp/deployment-temp.yaml <<EOF
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: aks-storage-app
-  labels:
-    app: aks-storage-app
-spec:
-  replicas: 2
-  selector:
-    matchLabels:
-      app: aks-storage-app
-  template:
-    metadata:
-      labels:
-        app: aks-storage-app
-        azure.workload.identity/use: "true"
-    spec:
-      serviceAccountName: $SERVICE_ACCOUNT_NAME
-      containers:
-      - name: app
-        image: $APP_IMAGE
-        imagePullPolicy: Always
-        ports:
-        - containerPort: 8080
-          name: http
-        env:
-        - name: AZURE_STORAGE_ACCOUNT_NAME
-          value: "$STORAGE_ACCOUNT_NAME"
-        - name: AZURE_STORAGE_CONTAINER_NAME
-          value: "$CONTAINER_NAME"
-        resources:
-          requests:
-            cpu: 100m
-            memory: 128Mi
-          limits:
-            cpu: 500m
-            memory: 512Mi
-        livenessProbe:
-          httpGet:
-            path: /health
-            port: 8080
-          initialDelaySeconds: 30
-          periodSeconds: 10
-          timeoutSeconds: 5
-          failureThreshold: 3
-        readinessProbe:
-          httpGet:
-            path: /health
-            port: 8080
-          initialDelaySeconds: 10
-          periodSeconds: 5
-          timeoutSeconds: 3
-          failureThreshold: 3
-EOF
+# Use the existing deployment file and substitute environment variables
+sed -e "s/workload-identity-sa/$SERVICE_ACCOUNT_NAME/g" \
+    -e "s/<your-storage-account-name>/$STORAGE_ACCOUNT_NAME/g" \
+    k8s/deployment.yaml > /tmp/deployment-temp.yaml
 
 echo ""
 echo "Step 2: Deploying application to Kubernetes..."
@@ -159,6 +107,22 @@ echo "  kubectl logs -l app=aks-storage-app --tail=50"
 echo ""
 echo "View pods:"
 echo "  kubectl get pods -l app=aks-storage-app"
+echo ""
+
+# Append Lab 3 outputs to the shared .env file
+LAB_ENV="../lab-outputs.env"
+echo "" >> "$LAB_ENV"
+echo "# Lab 3 outputs - Sample application deployment" >> "$LAB_ENV"
+echo "CONTAINER_NAME=$CONTAINER_NAME" >> "$LAB_ENV"
+echo "APP_IMAGE=$APP_IMAGE" >> "$LAB_ENV"
+echo "APP_DEPLOYMENT_NAME=aks-storage-app" >> "$LAB_ENV"
+echo "APP_SERVICE_NAME=aks-storage-app-service" >> "$LAB_ENV"
+echo "APP_NAMESPACE=default" >> "$LAB_ENV"
+if [ -n "$EXTERNAL_IP" ]; then
+    echo "APP_EXTERNAL_IP=$EXTERNAL_IP" >> "$LAB_ENV"
+fi
+echo ""
+echo "Lab 3 outputs appended to $LAB_ENV"
 echo ""
 
 # Clean up temp file
