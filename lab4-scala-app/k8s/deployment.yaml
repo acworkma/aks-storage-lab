@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aks-storage-app-scala
+  labels:
+    app: aks-storage-app-scala
+    language: scala
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: aks-storage-app-scala
+  template:
+    metadata:
+      labels:
+        app: aks-storage-app-scala
+        language: scala
+        azure.workload.identity/use: "true"  # Enable workload identity
+    spec:
+      serviceAccountName: workload-identity-sa  # Use the service account from Lab 2
+      containers:
+      - name: app
+        # LOCAL DEV: Use a locally built image and set imagePullPolicy: Never (only works with local clusters like kind/minikube)
+        # ACR / PROD: Script will substitute this with your ACR image reference and set imagePullPolicy: Always
+        image: aks-storage-app-scala:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 8080
+          name: http
+        env:
+        - name: AZURE_STORAGE_ACCOUNT_NAME
+          value: "<your-storage-account-name>"  # REQUIRED: Update with your storage account name
+        - name: AZURE_STORAGE_CONTAINER_NAME
+          value: "data"
+        # These are automatically injected by workload identity
+        # - AZURE_CLIENT_ID
+        # - AZURE_TENANT_ID
+        # - AZURE_FEDERATED_TOKEN_FILE
+        resources:
+          requests:
+            cpu: 200m
+            memory: 512Mi
+          limits:
+            cpu: 1000m
+            memory: 1Gi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 45
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3

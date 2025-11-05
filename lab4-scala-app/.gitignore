@@ -1,0 +1,29 @@
+# Scala build artifacts
+target/
+project/target/
+project/project/
+
+# sbt specific
+.cache
+.history
+.lib/
+dist/*
+lib_managed/
+src_managed/
+project/boot/
+project/plugins/project/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.metals/
+.bloop/
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
