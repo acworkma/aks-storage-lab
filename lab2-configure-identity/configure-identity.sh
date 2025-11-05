@@ -7,15 +7,17 @@ set -e  # Exit on error
 
 
 
-# Source outputs from Lab 1
-LAB1_ENV="../lab-outputs.env"
+# Source outputs from Lab 1 (env file resides at repo root)
+SCRIPT_DIR="$(cd -- "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+LAB1_ENV="$REPO_ROOT/lab-outputs.env"
 if [ -f "$LAB1_ENV" ]; then
-    set -a
-    source "$LAB1_ENV"
-    set +a
+  set -a
+  source "$LAB1_ENV"
+  set +a
 else
-    echo "Error: $LAB1_ENV not found. Please run Lab 1 deployment first."
-    exit 1
+  echo "Error: $LAB1_ENV not found. Please run Lab 1 deployment first."
+  exit 1
 fi
 # Additional variables for this lab
 MANAGED_IDENTITY_NAME="id-aks-storage"
@@ -180,16 +182,18 @@ echo "AZURE_CLIENT_ID=$USER_ASSIGNED_CLIENT_ID"
 echo "SERVICE_ACCOUNT_NAME=$SERVICE_ACCOUNT_NAME"
 echo ""
 
-# Append Lab 2 outputs to the shared .env file
-LAB_ENV="../lab-outputs.env"
-echo "" >> "$LAB_ENV"
-echo "# Lab 2 outputs - Managed Identity configuration" >> "$LAB_ENV"
-echo "AZURE_CLIENT_ID=$USER_ASSIGNED_CLIENT_ID" >> "$LAB_ENV"
-echo "SERVICE_ACCOUNT_NAME=$SERVICE_ACCOUNT_NAME" >> "$LAB_ENV"
-echo "SERVICE_ACCOUNT_NAMESPACE=$SERVICE_ACCOUNT_NAMESPACE" >> "$LAB_ENV"
-echo "MANAGED_IDENTITY_NAME=$MANAGED_IDENTITY_NAME" >> "$LAB_ENV"
-echo ""
+# Append Lab 2 outputs to the shared env file (repo root)
+LAB_ENV="$LAB1_ENV"
+{
+  echo ""
+  echo "# Lab 2 outputs - Managed Identity configuration"
+  echo "AZURE_CLIENT_ID=$USER_ASSIGNED_CLIENT_ID"
+  echo "SERVICE_ACCOUNT_NAME=$SERVICE_ACCOUNT_NAME"
+  echo "SERVICE_ACCOUNT_NAMESPACE=$SERVICE_ACCOUNT_NAMESPACE"
+  echo "MANAGED_IDENTITY_NAME=$MANAGED_IDENTITY_NAME"
+} >> "$LAB_ENV"
 echo "Lab 2 outputs appended to $LAB_ENV"
+echo ""
 echo ""
 
 echo "Note: Workload identity may take a few minutes to fully propagate."

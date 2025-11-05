@@ -4,8 +4,11 @@
 
 set -e  # Exit on error
 
-# Source outputs from previous labs
-LAB_ENV="../lab-outputs.env"
+# Source outputs from previous labs (env file at repo root)
+SCRIPT_DIR="$(cd -- "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+LAB_ENV="$REPO_ROOT/lab-outputs.env"
+K8S_DIR="$SCRIPT_DIR/k8s"
 if [ -f "$LAB_ENV" ]; then
     set -a
     source "$LAB_ENV"
@@ -38,15 +41,19 @@ fi
 
 echo "Step 1: Updating deployment manifest with storage account name..."
 
-# Use the existing deployment file and substitute environment variables
+# Use the existing deployment file and substitute environment variables (path adjusted to script directory)
+if [ ! -f "$K8S_DIR/deployment.yaml" ]; then
+    echo "Error: deployment manifest not found at $K8S_DIR/deployment.yaml" >&2
+    exit 2
+fi
 sed -e "s/workload-identity-sa/$SERVICE_ACCOUNT_NAME/g" \
-    -e "s/<your-storage-account-name>/$STORAGE_ACCOUNT_NAME/g" \
-    k8s/deployment.yaml > /tmp/deployment-temp.yaml
+        -e "s/<your-storage-account-name>/$STORAGE_ACCOUNT_NAME/g" \
+        "$K8S_DIR/deployment.yaml" > /tmp/deployment-temp.yaml
 
 echo ""
 echo "Step 2: Deploying application to Kubernetes..."
 kubectl apply -f /tmp/deployment-temp.yaml
-kubectl apply -f k8s/service.yaml
+kubectl apply -f "$K8S_DIR/service.yaml"
 
 echo ""
 echo "Step 3: Waiting for deployment to be ready..."
@@ -109,19 +116,19 @@ echo "View pods:"
 echo "  kubectl get pods -l app=aks-storage-app"
 echo ""
 
-# Append Lab 3 outputs to the shared .env file
-LAB_ENV="../lab-outputs.env"
-echo "" >> "$LAB_ENV"
-echo "# Lab 3 outputs - Sample application deployment" >> "$LAB_ENV"
-echo "CONTAINER_NAME=$CONTAINER_NAME" >> "$LAB_ENV"
-echo "APP_IMAGE=$APP_IMAGE" >> "$LAB_ENV"
-echo "APP_DEPLOYMENT_NAME=aks-storage-app" >> "$LAB_ENV"
-echo "APP_SERVICE_NAME=aks-storage-app-service" >> "$LAB_ENV"
-echo "APP_NAMESPACE=default" >> "$LAB_ENV"
-if [ -n "$EXTERNAL_IP" ]; then
-    echo "APP_EXTERNAL_IP=$EXTERNAL_IP" >> "$LAB_ENV"
-fi
-echo ""
+# Append Lab 3 outputs to the shared env file (repo root)
+{
+    echo ""
+    echo "# Lab 3 outputs - Sample application deployment"
+    echo "CONTAINER_NAME=$CONTAINER_NAME"
+    echo "APP_IMAGE=$APP_IMAGE"
+    echo "APP_DEPLOYMENT_NAME=aks-storage-app"
+    echo "APP_SERVICE_NAME=aks-storage-app-service"
+    echo "APP_NAMESPACE=default"
+    if [ -n "$EXTERNAL_IP" ]; then
+        echo "APP_EXTERNAL_IP=$EXTERNAL_IP"
+    fi
+} >> "$LAB_ENV"
 echo "Lab 3 outputs appended to $LAB_ENV"
 echo ""
 

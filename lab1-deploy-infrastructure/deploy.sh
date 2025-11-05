@@ -123,8 +123,13 @@ KUBELET_IDENTITY=$(az aks show -n "$AKS_CLUSTER_NAME" -g "$RESOURCE_GROUP" --que
 echo "Kubelet Identity Client ID: $KUBELET_IDENTITY"
 echo ""
 
-# Write outputs to .env file for later labs
-OUTPUT_FILE="${OUTPUT_FILE:-../lab-outputs.env}"
+# Determine repository root (one directory up from this script directory)
+SCRIPT_DIR="$(cd -- "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+# Always write the env file at the repo root so all labs have a stable path
+OUTPUT_FILE="${OUTPUT_FILE:-$REPO_ROOT/lab-outputs.env}"
+
+# Write outputs to env file for later labs (overwrites on Lab 1 rerun)
 cat > "$OUTPUT_FILE" <<EOF
 # Lab 1 outputs - Infrastructure deployment
 RESOURCE_GROUP=$RESOURCE_GROUP
