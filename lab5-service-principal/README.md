@@ -9,6 +9,8 @@ This lab demonstrates a **secretless authentication** approach using:
 - **Federated Identity Credentials** for OIDC-based authentication
 - **AKS Workload Identity** for seamless integration with Kubernetes
 
+For a detailed comparison between service principals and managed identities, see the [Authentication Methods Comparison](../AUTHENTICATION-COMPARISON.md) guide.
+
 ### Key Differences: Service Principal vs Managed Identity
 
 | Aspect | Lab 2 (Managed Identity) | Lab 5 (Service Principal) |

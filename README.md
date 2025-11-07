@@ -66,7 +66,7 @@ Alternative authentication approach using a service principal:
 
 **Duration:** ~25 minutes
 
-**Note:** Lab 5 is independent of Lab 2 and demonstrates an alternative approach. You can run either Lab 2 or Lab 5, or both to compare the approaches.
+**Note:** Lab 5 is independent of Lab 2 and demonstrates an alternative approach. You can run either Lab 2 or Lab 5, or both to compare the approaches. See [Authentication Methods Comparison](./AUTHENTICATION-COMPARISON.md) for a detailed comparison.
 
 ## Getting Started
 
