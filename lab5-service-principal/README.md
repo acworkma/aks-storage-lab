@@ -64,15 +64,15 @@ The script will:
 
 If you prefer to understand each step, follow the manual instructions below.
 
-#### 1. Set Variables
+#### 1. Set Variables (If doing manual steps)
 
 ```bash
 export RESOURCE_GROUP="rg-aks-storage-lab-wus3"
 export AKS_CLUSTER_NAME="aks-storage-cluster"
 export STORAGE_ACCOUNT_NAME="<your-storage-account-name>"
 export SERVICE_PRINCIPAL_NAME="sp-aks-storage-lab"
-export SERVICE_ACCOUNT_NAMESPACE="default"
-export SERVICE_ACCOUNT_NAME="sp-workload-identity-sa"
+export SERVICE_ACCOUNT_NAMESPACE="lab5"
+export SERVICE_ACCOUNT_NAME="lab5-sp-sa"
 ```
 
 #### 2. Get AKS OIDC Issuer URL

@@ -53,10 +53,10 @@ echo "  Resource Group:      ${RESOURCE_GROUP:-<not set>}"
 echo "  AKS Cluster:         ${AKS_CLUSTER_NAME:-<not set>}"
 echo "  Storage Account:     ${STORAGE_ACCOUNT_NAME:-<not set>}"
 echo "  Managed Identity:    ${MANAGED_IDENTITY_NAME:-<not set>}"
-echo "  Service Principal:   ${SP_NAME:-<not set>}"
-echo "  Python Deployment:   ${APP_DEPLOYMENT_NAME:-aks-storage-app} (Service: ${APP_SERVICE_NAME:-aks-storage-app-service})"
-echo "  Scala Deployment:    ${SCALA_APP_DEPLOYMENT_NAME:-aks-storage-app-scala} (Service: ${SCALA_APP_SERVICE_NAME:-aks-storage-app-scala-service})"
-echo "  SP Deployment:       ${SP_APP_DEPLOYMENT_NAME:-aks-storage-app-sp} (Service: ${SP_APP_SERVICE_NAME:-aks-storage-app-sp-service})"
+echo "  Service Principal App ID:   ${LAB5_SERVICE_PRINCIPAL_APP_ID:-<not set>}"
+echo "  Python Deployment:          ${APP_DEPLOYMENT_NAME:-aks-storage-app} (Service: ${APP_SERVICE_NAME:-aks-storage-app-service})"
+echo "  Scala Deployment:           ${SCALA_APP_DEPLOYMENT_NAME:-aks-storage-app-scala} (Service: ${SCALA_APP_SERVICE_NAME:-aks-storage-app-scala-service})"
+echo "  Lab5 Deployment:            ${LAB5_DEPLOYMENT_NAME:-aks-storage-app-sp} (Service: ${LAB5_SERVICE_NAME:-aks-storage-app-sp-service})"
 echo "  Azure Container Reg: ${ACR_NAME:-<not set>}"
 echo ""
 
@@ -107,16 +107,16 @@ if command -v kubectl &> /dev/null; then
             echo "  Scala service not found (already deleted or never created)"
         fi
 
-        # Delete Service Principal app (Lab 5)
-        if kubectl get deployment "${SP_APP_DEPLOYMENT_NAME:-aks-storage-app-sp}" -n "${SP_APP_NAMESPACE:-default}" &> /dev/null; then
-            kubectl delete deployment "${SP_APP_DEPLOYMENT_NAME:-aks-storage-app-sp}" -n "${SP_APP_NAMESPACE:-default}" || echo "  Service Principal deployment already deleted or not found"
+        # Delete Lab 5 Service Principal app (namespaced lab5)
+        if kubectl get deployment "${LAB5_DEPLOYMENT_NAME:-aks-storage-app-sp}" -n "${LAB5_NAMESPACE:-lab5}" &> /dev/null; then
+            kubectl delete deployment "${LAB5_DEPLOYMENT_NAME:-aks-storage-app-sp}" -n "${LAB5_NAMESPACE:-lab5}" || echo "  Lab5 deployment already deleted or not found"
         else
-            echo "  Service Principal deployment not found (already deleted or never created)"
+            echo "  Lab5 deployment not found (already deleted or never created)"
         fi
-        if kubectl get service "${SP_APP_SERVICE_NAME:-aks-storage-app-sp-service}" -n "${SP_APP_NAMESPACE:-default}" &> /dev/null; then
-            kubectl delete service "${SP_APP_SERVICE_NAME:-aks-storage-app-sp-service}" -n "${SP_APP_NAMESPACE:-default}" || echo "  Service Principal service already deleted or not found"
+        if kubectl get service "${LAB5_SERVICE_NAME:-aks-storage-app-sp-service}" -n "${LAB5_NAMESPACE:-lab5}" &> /dev/null; then
+            kubectl delete service "${LAB5_SERVICE_NAME:-aks-storage-app-sp-service}" -n "${LAB5_NAMESPACE:-lab5}" || echo "  Lab5 service already deleted or not found"
         else
-            echo "  Service Principal service not found (already deleted or never created)"
+            echo "  Lab5 service not found (already deleted or never created)"
         fi
         
     # Delete the workload identity service account (Lab 2)
@@ -126,12 +126,22 @@ if command -v kubectl &> /dev/null; then
             echo "  Service account not found (already deleted or never created)"
         fi
 
-        # Delete the service principal service account (Lab 5)
-        if kubectl get serviceaccount "${SP_SERVICE_ACCOUNT_NAME:-sp-workload-identity-sa}" -n "${SP_SERVICE_ACCOUNT_NAMESPACE:-default}" &> /dev/null; then
-            kubectl delete serviceaccount "${SP_SERVICE_ACCOUNT_NAME:-sp-workload-identity-sa}" -n "${SP_SERVICE_ACCOUNT_NAMESPACE:-default}" || echo "  SP service account already deleted or not found"
-        else
-            echo "  SP service account not found (already deleted or never created)"
-        fi
+                # Delete the Lab5 service principal service account
+                if kubectl get serviceaccount "${LAB5_SERVICE_ACCOUNT_NAME:-lab5-sp-sa}" -n "${LAB5_SERVICE_ACCOUNT_NAMESPACE:-lab5}" &> /dev/null; then
+                        kubectl delete serviceaccount "${LAB5_SERVICE_ACCOUNT_NAME:-lab5-sp-sa}" -n "${LAB5_SERVICE_ACCOUNT_NAMESPACE:-lab5}" || echo "  Lab5 service account already deleted or not found"
+                else
+                        echo "  Lab5 service account not found (already deleted or never created)"
+                fi
+                # Optionally delete lab5 namespace if empty and flag set
+                if [ "${DELETE_LAB5_NAMESPACE:-false}" = "true" ]; then
+                    if kubectl get namespace "${LAB5_SERVICE_ACCOUNT_NAMESPACE:-lab5}" &>/dev/null; then
+                        if [ -z "$(kubectl get all -n "${LAB5_SERVICE_ACCOUNT_NAMESPACE:-lab5}" --no-headers 2>/dev/null || true)" ]; then
+                            kubectl delete namespace "${LAB5_SERVICE_ACCOUNT_NAMESPACE:-lab5}" || echo "  Failed to delete lab5 namespace"
+                        else
+                            echo "  lab5 namespace not empty; skipping deletion"
+                        fi
+                    fi
+                fi
         
         echo "  Kubernetes resources cleaned up successfully"
     else
@@ -151,18 +161,18 @@ echo "Lab 5: Cleaning up Service Principal..."
 echo "============================================"
 echo ""
 
-if [ -n "$SP_APP_ID" ]; then
+if [ -n "$LAB5_SERVICE_PRINCIPAL_APP_ID" ]; then
     echo "Step 2a: Deleting service principal federated credentials..."
     # List and delete federated credentials for service principal
     FEDERATED_CREDS=$(az ad app federated-credential list \
-        --id "$SP_APP_ID" \
+        --id "$LAB5_SERVICE_PRINCIPAL_APP_ID" \
         --query '[].name' -o tsv 2>/dev/null || echo "")
     
     if [ -n "$FEDERATED_CREDS" ]; then
         for CRED in $FEDERATED_CREDS; do
             echo "  Deleting federated credential: $CRED"
             az ad app federated-credential delete \
-                --id "$SP_APP_ID" \
+                --id "$LAB5_SERVICE_PRINCIPAL_APP_ID" \
                 --federated-credential-id "$CRED" \
                 --yes 2>/dev/null || echo "  Failed to delete $CRED or already removed"
         done
@@ -172,7 +182,7 @@ if [ -n "$SP_APP_ID" ]; then
     
     echo ""
     echo "Step 2b: Deleting service principal role assignments..."
-    ROLE_ASSIGNMENTS=$(az role assignment list --assignee "$SP_APP_ID" --query '[].id' -o tsv 2>/dev/null || echo "")
+    ROLE_ASSIGNMENTS=$(az role assignment list --assignee "$LAB5_SERVICE_PRINCIPAL_APP_ID" --query '[].id' -o tsv 2>/dev/null || echo "")
     if [ -n "$ROLE_ASSIGNMENTS" ]; then
         for ASSIGNMENT in $ROLE_ASSIGNMENTS; do
             echo "  Deleting role assignment: $ASSIGNMENT"
@@ -184,11 +194,16 @@ if [ -n "$SP_APP_ID" ]; then
     
     echo ""
     echo "Step 2c: Deleting service principal..."
-    az ad sp delete --id "$SP_APP_ID" 2>/dev/null || echo "  Failed to delete service principal or already removed"
+        if [ "${DELETE_LAB5_APP:-true}" = "true" ]; then
+            echo "  Deleting Azure AD application (and service principal)..."
+            az ad app delete --id "$LAB5_SERVICE_PRINCIPAL_APP_ID" 2>/dev/null || echo "  Failed to delete application or already removed"
+        else
+            echo "  Skipping deletion of Azure AD application (DELETE_LAB5_APP!=true)"
+        fi
     
     echo "  Service principal resources cleaned up successfully"
 else
-    echo "  SP_APP_ID not set. Skipping service principal cleanup."
+    echo "  LAB5_SERVICE_PRINCIPAL_APP_ID not set. Skipping service principal cleanup."
 fi
 
 echo ""

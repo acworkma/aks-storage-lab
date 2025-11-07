@@ -12,6 +12,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: aks-storage-app-sp
+  namespace: lab5
   labels:
     app: aks-storage-app-sp
 spec:
@@ -25,7 +26,7 @@ spec:
         app: aks-storage-app-sp
         azure.workload.identity/use: "true"  # Enable workload identity
     spec:
-      serviceAccountName: sp-workload-identity-sa  # Use the service account from Lab 5 setup
+      serviceAccountName: lab5-sp-sa  # Service account created by configure-service-principal.sh
       containers:
       - name: app
         # Using inline approach for simplicity - same as Lab 3
@@ -106,7 +107,7 @@ spec:
           name: http
         env:
         - name: AZURE_STORAGE_ACCOUNT_NAME
-          value: "<your-storage-account-name>"  # REQUIRED: Update with your storage account name
+          value: "<your-storage-account-name>"  # substituted by deploy-app.sh
         - name: AZURE_STORAGE_CONTAINER_NAME
           value: "data"
         # These are automatically injected by workload identity
