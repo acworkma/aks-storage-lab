@@ -86,7 +86,7 @@ spec:
                     blob_name = f"test-sp-{os.getenv('HOSTNAME', 'unknown')}.txt"
                     blob_client = container_client.get_blob_client(blob_name)
                     blob_client.upload_blob(
-                        f"Test file from Lab 5 (Service Principal) - {os.getenv('HOSTNAME')}\\n",
+                        f"Test file from Lab 5 (Service Principal) - {os.getenv('HOSTNAME')}\n",
                         overwrite=True
                     )
                     return jsonify({
