@@ -119,8 +119,8 @@ echo "  kubectl get pods -l app=aks-storage-app-sp"
 echo ""
 
 # Append Lab 5 application outputs to the shared env file (repo root)
-# Remove old Lab 5 app outputs if they exist
-sed -i '/# Lab 5 app outputs/,/^$/d' "$LAB_ENV"
+# Remove old Lab 5 app outputs if they exist (more robust cleanup)
+grep -v "^# Lab 5 app outputs" "$LAB_ENV" | grep -v "^SP_CONTAINER_NAME=" | grep -v "^SP_APP_IMAGE=" | grep -v "^SP_APP_DEPLOYMENT_NAME=" | grep -v "^SP_APP_SERVICE_NAME=" | grep -v "^SP_APP_NAMESPACE=" | grep -v "^SP_APP_EXTERNAL_IP=" > "$LAB_ENV.tmp" && mv "$LAB_ENV.tmp" "$LAB_ENV"
 
 {
     echo ""

@@ -193,8 +193,8 @@ echo ""
 # Append Lab 5 outputs to the shared env file (repo root)
 LAB_ENV="$LAB1_ENV"
 
-# Remove old Lab 5 outputs if they exist
-sed -i '/# Lab 5 outputs/,/^$/d' "$LAB_ENV"
+# Remove old Lab 5 outputs if they exist (more robust cleanup)
+grep -v "^# Lab 5 outputs" "$LAB_ENV" | grep -v "^SP_APP_ID=" | grep -v "^SP_OBJECT_ID=" | grep -v "^SP_SERVICE_ACCOUNT_NAME=" | grep -v "^SP_SERVICE_ACCOUNT_NAMESPACE=" | grep -v "^SP_NAME=" > "$LAB_ENV.tmp" && mv "$LAB_ENV.tmp" "$LAB_ENV"
 
 {
   echo ""
