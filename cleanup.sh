@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # AKS Storage Lab - Cleanup Script
-# This script removes all resources created during Labs 1, 2, and 3
+# This script removes all resources created during Labs 1-5
 
 set -e  # Exit on error
 
@@ -10,8 +10,9 @@ echo "AKS Storage Lab - Cleanup Script"
 echo "============================================"
 echo ""
 echo "This script will remove ALL resources created during the labs:"
-echo "  - Kubernetes deployments and services (Lab 3 & Lab 4)"
+echo "  - Kubernetes deployments and services (Labs 3, 4, & 5)"
 echo "  - Managed identities and role assignments (Lab 2)"
+echo "  - Service principals and federated credentials (Lab 5)"
 echo "  - AKS cluster, Storage Account, Container Registry, and Resource Group (Labs 1 & 4)"
 echo ""
 
@@ -52,8 +53,10 @@ echo "  Resource Group:      ${RESOURCE_GROUP:-<not set>}"
 echo "  AKS Cluster:         ${AKS_CLUSTER_NAME:-<not set>}"
 echo "  Storage Account:     ${STORAGE_ACCOUNT_NAME:-<not set>}"
 echo "  Managed Identity:    ${MANAGED_IDENTITY_NAME:-<not set>}"
-echo "  Python Deployment:   ${APP_DEPLOYMENT_NAME:-aks-storage-app} (Service: ${APP_SERVICE_NAME:-aks-storage-app-service})"
-echo "  Scala Deployment:    ${SCALA_APP_DEPLOYMENT_NAME:-aks-storage-app-scala} (Service: ${SCALA_APP_SERVICE_NAME:-aks-storage-app-scala-service})"
+echo "  Service Principal App ID:   ${LAB5_SERVICE_PRINCIPAL_APP_ID:-<not set>}"
+echo "  Python Deployment:          ${APP_DEPLOYMENT_NAME:-aks-storage-app} (Service: ${APP_SERVICE_NAME:-aks-storage-app-service})"
+echo "  Scala Deployment:           ${SCALA_APP_DEPLOYMENT_NAME:-aks-storage-app-scala} (Service: ${SCALA_APP_SERVICE_NAME:-aks-storage-app-scala-service})"
+echo "  Lab5 Deployment:            ${LAB5_DEPLOYMENT_NAME:-aks-storage-app-sp} (Service: ${LAB5_SERVICE_NAME:-aks-storage-app-sp-service})"
 echo "  Azure Container Reg: ${ACR_NAME:-<not set>}"
 echo ""
 
@@ -70,7 +73,7 @@ echo ""
 
 # Lab 3: Clean up Kubernetes resources
 echo "============================================"
-echo "Lab 3 & Lab 4: Cleaning up Kubernetes resources..."
+echo "Labs 3, 4, & 5: Cleaning up Kubernetes resources..."
 echo "============================================"
 echo ""
 
@@ -103,13 +106,42 @@ if command -v kubectl &> /dev/null; then
         else
             echo "  Scala service not found (already deleted or never created)"
         fi
+
+        # Delete Lab 5 Service Principal app (namespaced lab5)
+        if kubectl get deployment "${LAB5_DEPLOYMENT_NAME:-aks-storage-app-sp}" -n "${LAB5_NAMESPACE:-lab5}" &> /dev/null; then
+            kubectl delete deployment "${LAB5_DEPLOYMENT_NAME:-aks-storage-app-sp}" -n "${LAB5_NAMESPACE:-lab5}" || echo "  Lab5 deployment already deleted or not found"
+        else
+            echo "  Lab5 deployment not found (already deleted or never created)"
+        fi
+        if kubectl get service "${LAB5_SERVICE_NAME:-aks-storage-app-sp-service}" -n "${LAB5_NAMESPACE:-lab5}" &> /dev/null; then
+            kubectl delete service "${LAB5_SERVICE_NAME:-aks-storage-app-sp-service}" -n "${LAB5_NAMESPACE:-lab5}" || echo "  Lab5 service already deleted or not found"
+        else
+            echo "  Lab5 service not found (already deleted or never created)"
+        fi
         
-    # Delete the workload identity service account
+    # Delete the workload identity service account (Lab 2)
         if kubectl get serviceaccount "${SERVICE_ACCOUNT_NAME:-workload-identity-sa}" -n "${SERVICE_ACCOUNT_NAMESPACE:-default}" &> /dev/null; then
             kubectl delete serviceaccount "${SERVICE_ACCOUNT_NAME:-workload-identity-sa}" -n "${SERVICE_ACCOUNT_NAMESPACE:-default}" || echo "  Service account already deleted or not found"
         else
             echo "  Service account not found (already deleted or never created)"
         fi
+
+                # Delete the Lab5 service principal service account
+                if kubectl get serviceaccount "${LAB5_SERVICE_ACCOUNT_NAME:-lab5-sp-sa}" -n "${LAB5_SERVICE_ACCOUNT_NAMESPACE:-lab5}" &> /dev/null; then
+                        kubectl delete serviceaccount "${LAB5_SERVICE_ACCOUNT_NAME:-lab5-sp-sa}" -n "${LAB5_SERVICE_ACCOUNT_NAMESPACE:-lab5}" || echo "  Lab5 service account already deleted or not found"
+                else
+                        echo "  Lab5 service account not found (already deleted or never created)"
+                fi
+                # Optionally delete lab5 namespace if empty and flag set
+                if [ "${DELETE_LAB5_NAMESPACE:-false}" = "true" ]; then
+                    if kubectl get namespace "${LAB5_SERVICE_ACCOUNT_NAMESPACE:-lab5}" &>/dev/null; then
+                        if [ -z "$(kubectl get all -n "${LAB5_SERVICE_ACCOUNT_NAMESPACE:-lab5}" --no-headers 2>/dev/null || true)" ]; then
+                            kubectl delete namespace "${LAB5_SERVICE_ACCOUNT_NAMESPACE:-lab5}" || echo "  Failed to delete lab5 namespace"
+                        else
+                            echo "  lab5 namespace not empty; skipping deletion"
+                        fi
+                    fi
+                fi
         
         echo "  Kubernetes resources cleaned up successfully"
     else
@@ -119,6 +151,59 @@ if command -v kubectl &> /dev/null; then
 else
     echo "  kubectl not found. Skipping Kubernetes cleanup."
     echo "  (Resources will be deleted when the AKS cluster is removed)"
+fi
+
+echo ""
+
+# Lab 5: Clean up Service Principal resources
+echo "============================================"
+echo "Lab 5: Cleaning up Service Principal..."
+echo "============================================"
+echo ""
+
+if [ -n "$LAB5_SERVICE_PRINCIPAL_APP_ID" ]; then
+    echo "Step 2a: Deleting service principal federated credentials..."
+    # List and delete federated credentials for service principal
+    FEDERATED_CREDS=$(az ad app federated-credential list \
+        --id "$LAB5_SERVICE_PRINCIPAL_APP_ID" \
+        --query '[].name' -o tsv 2>/dev/null || echo "")
+    
+    if [ -n "$FEDERATED_CREDS" ]; then
+        for CRED in $FEDERATED_CREDS; do
+            echo "  Deleting federated credential: $CRED"
+            az ad app federated-credential delete \
+                --id "$LAB5_SERVICE_PRINCIPAL_APP_ID" \
+                --federated-credential-id "$CRED" \
+                --yes 2>/dev/null || echo "  Failed to delete $CRED or already removed"
+        done
+    else
+        echo "  No federated credentials found"
+    fi
+    
+    echo ""
+    echo "Step 2b: Deleting service principal role assignments..."
+    ROLE_ASSIGNMENTS=$(az role assignment list --assignee "$LAB5_SERVICE_PRINCIPAL_APP_ID" --query '[].id' -o tsv 2>/dev/null || echo "")
+    if [ -n "$ROLE_ASSIGNMENTS" ]; then
+        for ASSIGNMENT in $ROLE_ASSIGNMENTS; do
+            echo "  Deleting role assignment: $ASSIGNMENT"
+            az role assignment delete --ids "$ASSIGNMENT" 2>/dev/null || echo "  Failed to delete role assignment"
+        done
+    else
+        echo "  No role assignments found"
+    fi
+    
+    echo ""
+    echo "Step 2c: Deleting service principal..."
+        if [ "${DELETE_LAB5_APP:-true}" = "true" ]; then
+            echo "  Deleting Azure AD application (and service principal)..."
+            az ad app delete --id "$LAB5_SERVICE_PRINCIPAL_APP_ID" 2>/dev/null || echo "  Failed to delete application or already removed"
+        else
+            echo "  Skipping deletion of Azure AD application (DELETE_LAB5_APP!=true)"
+        fi
+    
+    echo "  Service principal resources cleaned up successfully"
+else
+    echo "  LAB5_SERVICE_PRINCIPAL_APP_ID not set. Skipping service principal cleanup."
 fi
 
 echo ""
@@ -134,7 +219,7 @@ if [ -n "$RESOURCE_GROUP" ] && [ -n "$MANAGED_IDENTITY_NAME" ]; then
     if az group show --name "$RESOURCE_GROUP" &> /dev/null; then
         # Check if managed identity exists
         if az identity show --name "$MANAGED_IDENTITY_NAME" --resource-group "$RESOURCE_GROUP" &> /dev/null; then
-            echo "Step 2: Deleting federated identity credentials..."
+            echo "Step 3: Deleting federated identity credentials..."
             # List and delete federated credentials
             FEDERATED_CREDS=$(az identity federated-credential list \
                 --identity-name "$MANAGED_IDENTITY_NAME" \
@@ -155,7 +240,7 @@ if [ -n "$RESOURCE_GROUP" ] && [ -n "$MANAGED_IDENTITY_NAME" ]; then
             fi
             
             echo ""
-            echo "Step 3: Deleting role assignments..."
+            echo "Step 4: Deleting role assignments..."
             # Get the client ID to find role assignments
             if [ -n "$AZURE_CLIENT_ID" ]; then
                 ROLE_ASSIGNMENTS=$(az role assignment list --assignee "$AZURE_CLIENT_ID" --query '[].id' -o tsv 2>/dev/null || echo "")
@@ -172,7 +257,7 @@ if [ -n "$RESOURCE_GROUP" ] && [ -n "$MANAGED_IDENTITY_NAME" ]; then
             fi
             
             echo ""
-            echo "Step 4: Deleting managed identity..."
+            echo "Step 5: Deleting managed identity..."
             az identity delete \
                 --name "$MANAGED_IDENTITY_NAME" \
                 --resource-group "$RESOURCE_GROUP" || echo "  Failed to delete managed identity"
@@ -216,7 +301,7 @@ if [ -n "$RESOURCE_GROUP" ]; then
 
     # Check if resource group exists
     if az group show --name "$RESOURCE_GROUP" &> /dev/null; then
-        echo "Step 5: Deleting entire Resource Group (includes AKS cluster, Storage Account, and any remaining registry)..."
+        echo "Step 6: Deleting entire Resource Group (includes AKS cluster, Storage Account, and any remaining registry)..."
         echo "  This may take several minutes..."
         
         az group delete \
@@ -242,7 +327,8 @@ echo "Cleanup Complete!"
 echo "============================================"
 echo ""
 echo "Summary:"
-echo "  ✓ Lab 3 & Lab 4: Kubernetes resources removed"
+echo "  ✓ Labs 3, 4, & 5: Kubernetes resources removed"
+echo "  ✓ Lab 5: Service principal and federated credentials removed"
 echo "  ✓ Lab 2: Managed identity and role assignments removed"
 echo "  ✓ Lab 1 & Lab 4: Resource group deletion initiated"
 echo ""

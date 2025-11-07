@@ -1,0 +1,139 @@
+# AKS Storage Lab 5 - Kubernetes Deployment with Service Principal
+# 
+# This deployment demonstrates using a Service Principal with Federated Credentials
+# instead of a User-Assigned Managed Identity (used in Lab 2).
+#
+# Key differences from Lab 2:
+# - Uses a service principal (Azure AD application) instead of managed identity
+# - Same federated credential approach for workload identity
+# - No secrets or passwords needed - uses OIDC token exchange
+#
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aks-storage-app-sp
+  namespace: lab5
+  labels:
+    app: aks-storage-app-sp
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: aks-storage-app-sp
+  template:
+    metadata:
+      labels:
+        app: aks-storage-app-sp
+        azure.workload.identity/use: "true"  # Enable workload identity
+    spec:
+      serviceAccountName: lab5-sp-sa  # Service account created by configure-service-principal.sh
+      containers:
+      - name: app
+        # Using inline approach for simplicity - same as Lab 3
+        # This allows testing without building a custom Docker image
+        image: python:3.11-slim
+        command: 
+          - /bin/sh
+          - -c
+          - |
+            pip install --no-cache-dir flask==3.0.0 azure-identity==1.15.0 azure-storage-blob==12.19.0 gunicorn==21.2.0 && \
+            cat > /app.py << 'EOF'
+            from flask import Flask, jsonify
+            from azure.identity import DefaultAzureCredential
+            from azure.storage.blob import BlobServiceClient
+            import os
+            app = Flask(__name__)
+            STORAGE_ACCOUNT_NAME = os.getenv('AZURE_STORAGE_ACCOUNT_NAME')
+            CONTAINER_NAME = os.getenv('AZURE_STORAGE_CONTAINER_NAME', 'data')
+            account_url = f"https://{STORAGE_ACCOUNT_NAME}.blob.core.windows.net"
+            credential = DefaultAzureCredential()
+            blob_service_client = BlobServiceClient(account_url, credential=credential)
+            @app.route('/')
+            def home():
+                return jsonify({
+                    'message': 'AKS Storage Lab 5 - Service Principal',
+                    'storage_account': STORAGE_ACCOUNT_NAME,
+                    'auth_method': 'Service Principal with Federated Credentials'
+                })
+            @app.route('/health')
+            def health():
+                try:
+                    container_client = blob_service_client.get_container_client(CONTAINER_NAME)
+                    container_client.get_container_properties()
+                    return jsonify({
+                        'status': 'healthy', 
+                        'storage_account': STORAGE_ACCOUNT_NAME,
+                        'auth_method': 'Service Principal'
+                    })
+                except Exception as e:
+                    return jsonify({'status': 'unhealthy', 'error': str(e)}), 500
+            @app.route('/list')
+            def list_blobs():
+                try:
+                    container_client = blob_service_client.get_container_client(CONTAINER_NAME)
+                    blobs = [{'name': b.name, 'size': b.size} for b in container_client.list_blobs()]
+                    return jsonify({
+                        'container': CONTAINER_NAME, 
+                        'blob_count': len(blobs), 
+                        'blobs': blobs,
+                        'auth_method': 'Service Principal'
+                    })
+                except Exception as e:
+                    return jsonify({'error': str(e)}), 500
+            @app.route('/upload')
+            def upload_test():
+                try:
+                    container_client = blob_service_client.get_container_client(CONTAINER_NAME)
+                    blob_name = f"test-sp-{os.getenv('HOSTNAME', 'unknown')}.txt"
+                    blob_client = container_client.get_blob_client(blob_name)
+                    blob_client.upload_blob(
+                        f"Test file from Lab 5 (Service Principal) - {os.getenv('HOSTNAME')}\n",
+                        overwrite=True
+                    )
+                    return jsonify({
+                        'message': 'Upload successful',
+                        'blob_name': blob_name,
+                        'auth_method': 'Service Principal'
+                    })
+                except Exception as e:
+                    return jsonify({'error': str(e)}), 500
+            if __name__ == '__main__':
+                app.run(host='0.0.0.0', port=8080)
+            EOF
+            python /app.py
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8080
+          name: http
+        env:
+        - name: AZURE_STORAGE_ACCOUNT_NAME
+          value: "<your-storage-account-name>"  # substituted by deploy-app.sh
+        - name: AZURE_STORAGE_CONTAINER_NAME
+          value: "data"
+        # These are automatically injected by workload identity
+        # - AZURE_CLIENT_ID (Service Principal App ID)
+        # - AZURE_TENANT_ID
+        # - AZURE_FEDERATED_TOKEN_FILE
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
