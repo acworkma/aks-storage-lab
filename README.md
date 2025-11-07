@@ -9,6 +9,7 @@ In this lab, you will:
 - Configure managed identity / workload identity for secure access between AKS and Azure Storage
 - Deploy a sample Python application to validate secure blob access
 - (Optional) Deploy a Scala Akka HTTP application with automated Azure Container Registry (ACR) integration (Lab 4)
+- (Optional) Configure service principal with federated credentials as an alternative to managed identity (Lab 5)
 
 ## Prerequisites
 
@@ -21,7 +22,7 @@ Before starting this lab, you should have:
 
 ## Lab Structure
 
-This lab is divided into four parts:
+This lab is divided into five parts:
 
 ### [Lab 1: Deploy Azure Infrastructure](./lab1-deploy-infrastructure/)
 Deploy the necessary Azure resources including:
@@ -55,6 +56,17 @@ Extend the scenario with a production-style Scala (Akka HTTP) application:
 - Demonstrates multi-stage Docker build and registry-driven deployment
 
 **Duration:** ~30–40 minutes (first build + deploy)
+
+### [Lab 5: Service Principal with Federated Credentials](./lab5-service-principal/) (Optional)
+Alternative authentication approach using a service principal:
+- Create and configure service principal instead of managed identity
+- Use federated credentials for passwordless authentication
+- Compare service principal vs managed identity approaches
+- Deploy application using service principal authentication
+
+**Duration:** ~25 minutes
+
+**Note:** Lab 5 is independent of Lab 2 and demonstrates an alternative approach. You can run either Lab 2 or Lab 5, or both to compare the approaches.
 
 ## Getting Started
 
@@ -96,7 +108,7 @@ Extend the scenario with a production-style Scala (Akka HTTP) application:
 
 ## Clean Up
 
-After completing the labs, remember to delete the Azure resources to avoid unnecessary charges. If you ran Lab 4, an Azure Container Registry may also exist.
+After completing the labs, remember to delete the Azure resources to avoid unnecessary charges. If you ran Lab 4, an Azure Container Registry may also exist. If you ran Lab 5, a service principal will also need to be cleaned up.
 
 ### Automated Cleanup (Recommended)
 
@@ -107,7 +119,8 @@ Use the provided cleanup script to remove all resources created during the labs:
 ```
 
 This script will:
-- Remove Kubernetes deployments and services (Lab 3 + Lab 4)
+- Remove Kubernetes deployments and services (Labs 3, 4, & 5)
+- Delete service principal and federated credentials (Lab 5)
 - Delete managed identities and role assignments (Lab 2)
 - Delete the entire resource group including AKS cluster, Storage Account, and ACR (Labs 1 & 4)
 
@@ -119,14 +132,27 @@ If you prefer manual deletion:
 ```bash
 az group delete --name <resource-group-name> --yes --no-wait
 ```
-If you only want to remove the Scala deployment and keep the rest:
+If you only want to remove a specific deployment:
 ```bash
+# Remove Lab 3 (Python)
+kubectl delete deployment aks-storage-app
+kubectl delete service aks-storage-app-service
+
+# Remove Lab 4 (Scala)
 kubectl delete deployment aks-storage-app-scala
 kubectl delete service aks-storage-app-scala-service
+
+# Remove Lab 5 (Service Principal)
+kubectl delete deployment aks-storage-app-sp
+kubectl delete service aks-storage-app-sp-service
 ```
 Optionally delete ACR (only if not reused):
 ```bash
 az acr delete -n <acr-name> -g <resource-group-name>
+```
+If you created a service principal in Lab 5:
+```bash
+az ad sp delete --id <service-principal-app-id>
 ```
 
 ## Additional Resources
