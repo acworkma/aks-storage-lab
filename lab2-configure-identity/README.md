@@ -1,6 +1,6 @@
 # Lab 2: Configure Managed Identity
 
-In this lab, you will configure Azure managed identity to allow your AKS pods to securely access Azure Storage without managing credentials.
+In this lab, you will configure Azure managed identity to allow your AKS pods to securely access Azure Storage, Key Vault, and Container Registry without managing credentials.
 
 ## Prerequisites
 
@@ -12,7 +12,7 @@ In this lab, you will configure Azure managed identity to allow your AKS pods to
 
 You will:
 1. Create a user-assigned managed identity
-2. Assign the Storage Blob Data Contributor role to the identity
+2. Assign RBAC roles to the identity for Storage, Key Vault, and ACR
 3. Create a federated identity credential for workload identity
 4. Create a Kubernetes service account linked to the managed identity
 
@@ -24,24 +24,34 @@ Pod with Service Account
 Kubernetes Service Account
         ↓ (federated with)
 Azure Managed Identity
-        ↓ (has RBAC role)
-Azure Storage Account
+        ↓ (has RBAC roles)
+   ┌────────┼────────┐
+   ↓        ↓        ↓
+Storage  Key Vault   ACR
+Account
 ```
 
 ## Step-by-Step Instructions
 
 ### 1. Set Variables
 
-Set the variables from Lab 1 (adjust if you used different values):
+If running manually, set these variables. Note: if you use `./configure-identity.sh`, values are automatically loaded from `lab-outputs.env`:
 
 ```bash
-export RESOURCE_GROUP="rg-aks-storage-lab"
-export LOCATION="eastus"
+# These come from Lab 1's lab-outputs.env
+export RESOURCE_GROUP="rg-aks-storage-lab-wus3"
 export AKS_CLUSTER_NAME="aks-storage-cluster"
-export STORAGE_ACCOUNT_NAME="<your-storage-account-name>"
+export STORAGE_ACCOUNT_NAME="<from-lab-outputs.env>"
+export KEY_VAULT_NAME="kv-aks-auth"
+export ACR_NAME="acraksauthlab"
+
+# Lab 2 specific
 export MANAGED_IDENTITY_NAME="id-aks-storage"
 export SERVICE_ACCOUNT_NAMESPACE="default"
 export SERVICE_ACCOUNT_NAME="workload-identity-sa"
+
+# Location is derived from resource group
+export LOCATION=$(az group show --name $RESOURCE_GROUP --query location -o tsv)
 ```
 
 ### 2. Get AKS OIDC Issuer URL
@@ -77,9 +87,9 @@ export USER_ASSIGNED_CLIENT_ID=$(az identity show \
 echo "Managed Identity Client ID: $USER_ASSIGNED_CLIENT_ID"
 ```
 
-### 4. Assign Storage Blob Data Contributor Role
+### 4. Assign RBAC Roles
 
-Get the storage account ID:
+Get the resource IDs:
 
 ```bash
 export STORAGE_ACCOUNT_ID=$(az storage account show \
@@ -87,15 +97,40 @@ export STORAGE_ACCOUNT_ID=$(az storage account show \
   --resource-group $RESOURCE_GROUP \
   --query 'id' \
   --output tsv)
+
+export KEY_VAULT_ID=$(az keyvault show \
+  --name $KEY_VAULT_NAME \
+  --resource-group $RESOURCE_GROUP \
+  --query 'id' \
+  --output tsv)
+
+export ACR_ID=$(az acr show \
+  --name $ACR_NAME \
+  --resource-group $RESOURCE_GROUP \
+  --query 'id' \
+  --output tsv)
 ```
 
-Assign the role:
+Assign the roles:
 
 ```bash
+# Storage Blob Data Contributor - read/write blobs
 az role assignment create \
   --role "Storage Blob Data Contributor" \
   --assignee $USER_ASSIGNED_CLIENT_ID \
   --scope $STORAGE_ACCOUNT_ID
+
+# Key Vault Secrets User - read secrets
+az role assignment create \
+  --role "Key Vault Secrets User" \
+  --assignee $USER_ASSIGNED_CLIENT_ID \
+  --scope $KEY_VAULT_ID
+
+# AcrPush - push/pull container images
+az role assignment create \
+  --role "AcrPush" \
+  --assignee $USER_ASSIGNED_CLIENT_ID \
+  --scope $ACR_ID
 ```
 
 ### 5. Create Kubernetes Service Account
@@ -162,21 +197,23 @@ You can use the provided script to automate all the steps:
 ./configure-identity.sh
 ```
 
-Make sure to edit the script variables at the top before running.
+The script automatically loads configuration from `lab-outputs.env` (created by Lab 1). No manual editing required.
 
 ## What You've Configured
 
 After completing this lab:
 
 1. **User-Assigned Managed Identity**
-   - Exists in your resource group
+   - Name: `id-aks-storage`
    - Has federated credentials linked to your Kubernetes service account
 
-2. **RBAC Role Assignment**
-   - Managed identity has "Storage Blob Data Contributor" role on the storage account
-   - Can read, write, and delete blobs
+2. **RBAC Role Assignments**
+   - **Storage Blob Data Contributor** on Storage Account - can read, write, and delete blobs
+   - **Key Vault Secrets User** on Key Vault - can read secrets
+   - **AcrPush** on Container Registry - can push and pull images
 
 3. **Kubernetes Service Account**
+   - Name: `workload-identity-sa` in `default` namespace
    - Annotated with the managed identity client ID
    - Can be used by pods to acquire Azure tokens
 
@@ -230,8 +267,9 @@ kubectl delete pod test-pod
 ## Important Notes
 
 - The workload identity takes a few minutes to fully propagate
-- Pods must use the configured service account to access storage
-- The managed identity only has access to the specific storage account
+- Pods must use the configured service account to access Azure resources
+- The managed identity has access to Storage, Key Vault, and ACR in the resource group
+- The script is idempotent - safe to run multiple times
 
 ## Next Steps
 
