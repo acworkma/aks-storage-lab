@@ -7,6 +7,7 @@ In this lab, you will deploy a Python application that demonstrates secure acces
 - Completed [Lab 1: Deploy Azure Infrastructure](../lab1-deploy-infrastructure/)
 - Completed [Lab 2: Configure Managed Identity](../lab2-configure-identity/)
 - kubectl configured with access to your AKS cluster
+- Docker installed (for building container images)
 
 ## Overview
 
@@ -16,13 +17,14 @@ The sample application:
 - Lists blobs in the storage container
 - Uploads a test file to demonstrate write access
 - Provides a simple web interface to view results
+- Deploys to the `lab3` namespace (created by Lab 2)
 
 ## Architecture
 
 ```
 Browser → Service (LoadBalancer)
               ↓
-          Pod (Python App)
+          Pod (Python App) [namespace: lab3]
               ↓ (uses service account)
           Workload Identity
               ↓ (authenticates)
@@ -32,11 +34,25 @@ Browser → Service (LoadBalancer)
 ## Application Files
 
 The sample application consists of:
-- `app.py` - Python Flask application
-- `requirements.txt` - Python dependencies
-- `Dockerfile` - Container image definition
-- `deployment.yaml` - Kubernetes deployment manifest
-- `service.yaml` - Kubernetes service manifest
+- `app/app.py` - Python Flask application
+- `app/requirements.txt` - Python dependencies
+- `app/Dockerfile` - Container image definition
+- `k8s/deployment.yaml` - Kubernetes deployment manifest
+- `k8s/service.yaml` - Kubernetes service manifest
+
+## Quick Start
+
+The easiest way to deploy is using the provided script:
+
+```bash
+./deploy-app.sh
+```
+
+This script will:
+1. Build the Docker image from `app/Dockerfile`
+2. Push the image to your Azure Container Registry
+3. Deploy the application to the `lab3` namespace
+4. Wait for the external IP to be assigned
 
 ## Step-by-Step Instructions
 
@@ -53,83 +69,62 @@ Key points:
 - No connection strings or keys in the code
 - Relies on the Kubernetes service account for identity
 
-### 2. Set Variables
+### 2. Build and Push Container Image
 
 ```bash
-export RESOURCE_GROUP="rg-aks-storage-lab"
-export STORAGE_ACCOUNT_NAME="<your-storage-account-name>"
-export SERVICE_ACCOUNT_NAME="workload-identity-sa"
-export CONTAINER_NAME="data"
+# Source environment variables from previous labs
+source ../lab-outputs.env
+
+# Build the Docker image
+docker build -t aks-storage-app-python:v1 app/
+
+# Login to ACR
+az acr login --name $ACR_NAME
+
+# Tag and push to ACR
+docker tag aks-storage-app-python:v1 $ACR_LOGIN_SERVER/aks-storage-app-python:v1
+docker push $ACR_LOGIN_SERVER/aks-storage-app-python:v1
 ```
 
-### 3. Build and Push Container Image (Optional)
+### 3. Deploy the Application
 
-If you want to build the image yourself:
+Apply the Kubernetes manifests (the deploy script handles variable substitution):
 
 ```bash
-# Login to your container registry (Azure Container Registry recommended)
-az acr login --name <your-acr-name>
+# Substitute storage account name and image, then apply
+sed -e "s|image: aks-storage-app-python:latest|image: $ACR_LOGIN_SERVER/aks-storage-app-python:v1|g" \
+    -e "s/<your-storage-account-name>/$STORAGE_ACCOUNT_NAME/g" \
+    k8s/deployment.yaml | kubectl apply -f -
 
-# Build and push
-docker build -t <your-acr-name>.azurecr.io/aks-storage-app:v1 app/
-docker push <your-acr-name>.azurecr.io/aks-storage-app:v1
-```
-
-**Note:** For this lab, you can use the pre-built public image if you don't want to build your own.
-
-### 4. Update Kubernetes Manifests
-
-Edit `k8s/deployment.yaml` and update the environment variables:
-
-```yaml
-env:
-  - name: AZURE_STORAGE_ACCOUNT_NAME
-    value: "<your-storage-account-name>"
-  - name: AZURE_STORAGE_CONTAINER_NAME
-    value: "data"
-```
-
-Ensure the service account name matches:
-
-```yaml
-serviceAccountName: workload-identity-sa
-```
-
-### 5. Deploy the Application
-
-Deploy to Kubernetes:
-
-```bash
-kubectl apply -f k8s/deployment.yaml
 kubectl apply -f k8s/service.yaml
 ```
 
-### 6. Verify Deployment
+### 4. Verify Deployment
 
 Check that the pod is running:
 
 ```bash
-kubectl get pods -l app=aks-storage-app
+kubectl get pods -n lab3 -l app=aks-storage-app
 ```
 
 Wait for the pod to be ready:
 
 ```bash
-kubectl wait --for=condition=ready pod -l app=aks-storage-app --timeout=120s
+kubectl wait --for=condition=ready pod -l app=aks-storage-app -n lab3 --timeout=120s
 ```
 
 Check the logs to ensure it started correctly:
 
 ```bash
-kubectl logs -l app=aks-storage-app --tail=50
+kubectl logs -l app=aks-storage-app -n lab3 --tail=50
 ```
 
-### 7. Access the Application
+### 5. Access the Application
 
 Get the external IP address:
 
 ```bash
-kubectl get service aks-storage-app-service
+kubectl get service aks-storage-app-service -n lab3
 ```
 
 Wait for the `EXTERNAL-IP` to be assigned (this may take a few minutes).
@@ -137,7 +132,7 @@ Wait for the `EXTERNAL-IP` to be assigned (this may take a few minutes).
 Once you have the IP, access the application:
 
 ```bash
-export EXTERNAL_IP=$(kubectl get service aks-storage-app-service -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+export EXTERNAL_IP=$(kubectl get service aks-storage-app-service -n lab3 -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
 echo "Application URL: http://$EXTERNAL_IP"
 ```
 
@@ -147,7 +142,7 @@ Open the URL in your browser or use curl:
 curl http://$EXTERNAL_IP
 ```
 
-### 8. Test Storage Operations
+### 6. Test Storage Operations
 
 The application provides several endpoints:
 
@@ -166,20 +161,12 @@ curl -X POST http://$EXTERNAL_IP/upload
 curl http://$EXTERNAL_IP/health
 ```
 
-### 9. View Results in Azure Portal
+### 7. View Results in Azure Portal
 
 1. Go to the Azure Portal
 2. Navigate to your storage account
 3. Click on "Containers" → "data"
 4. You should see the test file uploaded by the application
-
-## Alternative: Deploy Using Script
-
-You can use the provided script to automate the deployment:
-
-```bash
-./deploy-app.sh
-```
 
 ## Application Details
 
@@ -218,7 +205,7 @@ You can use the provided script to automate the deployment:
 To see detailed logs:
 
 ```bash
-kubectl logs -l app=aks-storage-app -f
+kubectl logs -l app=aks-storage-app -n lab3 -f
 ```
 
 ## Testing Different Scenarios
@@ -228,8 +215,8 @@ kubectl logs -l app=aks-storage-app -f
 Check that the pod has the correct identity:
 
 ```bash
-POD_NAME=$(kubectl get pod -l app=aks-storage-app -o jsonpath='{.items[0].metadata.name}')
-kubectl exec $POD_NAME -- env | grep AZURE
+POD_NAME=$(kubectl get pod -n lab3 -l app=aks-storage-app -o jsonpath='{.items[0].metadata.name}')
+kubectl exec -n lab3 $POD_NAME -- env | grep AZURE
 ```
 
 ### Test 2: Interactive Testing
@@ -237,7 +224,7 @@ kubectl exec $POD_NAME -- env | grep AZURE
 Get a shell in the pod:
 
 ```bash
-kubectl exec -it $POD_NAME -- /bin/bash
+kubectl exec -n lab3 -it $POD_NAME -- /bin/bash
 ```
 
 Inside the pod, you can run Python code to test storage access:
@@ -267,6 +254,12 @@ To remove the application:
 ```bash
 kubectl delete -f k8s/deployment.yaml
 kubectl delete -f k8s/service.yaml
+```
+
+Or delete the entire namespace:
+
+```bash
+kubectl delete namespace lab3
 ```
 
 To clean up all lab resources:

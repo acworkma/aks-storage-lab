@@ -10,6 +10,8 @@ RESOURCE_GROUP="rg-aks-storage-lab-wus3"
 LOCATION="westus3"
 AKS_CLUSTER_NAME="aks-storage-cluster"
 STORAGE_ACCOUNT_NAME="aksstorage$(openssl rand -hex 4)"
+KEY_VAULT_NAME="kv-aks-auth"
+ACR_NAME="acraksauthlab"
 NODE_COUNT=2
 NODE_VM_SIZE="Standard_DS2_v2"
 # Kubernetes version: auto-detect latest stable if not overridden
@@ -26,6 +28,8 @@ echo "  Resource Group: $RESOURCE_GROUP"
 echo "  Location: $LOCATION"
 echo "  AKS Cluster: $AKS_CLUSTER_NAME"
 echo "  Storage Account: $STORAGE_ACCOUNT_NAME"
+echo "  Key Vault: $KEY_VAULT_NAME"
+echo "  Container Registry: $ACR_NAME"
 echo "  Node Count: $NODE_COUNT"
 echo "  Node VM Size: $NODE_VM_SIZE"
 echo "  Kubernetes Version: $KUBERNETES_VERSION"
@@ -74,7 +78,27 @@ az storage container create \
   --output table
 
 echo ""
-echo "Step 4: Creating AKS Cluster (this will take 5-10 minutes)..."
+echo "Step 4: Creating Key Vault..."
+az keyvault create \
+  --name "$KEY_VAULT_NAME" \
+  --resource-group "$RESOURCE_GROUP" \
+  --location "$LOCATION" \
+  --sku standard \
+  --enable-rbac-authorization true \
+  --output table
+
+echo ""
+echo "Step 5: Creating Azure Container Registry..."
+az acr create \
+  --name "$ACR_NAME" \
+  --resource-group "$RESOURCE_GROUP" \
+  --location "$LOCATION" \
+  --sku Basic \
+  --admin-enabled false \
+  --output table
+
+echo ""
+echo "Step 6: Creating AKS Cluster (this will take 5-10 minutes)..."
 az aks create \
   --resource-group "$RESOURCE_GROUP" \
   --name "$AKS_CLUSTER_NAME" \
@@ -87,18 +111,19 @@ az aks create \
   --enable-oidc-issuer \
   --network-plugin azure \
   --network-policy azure \
+  --attach-acr "$ACR_NAME" \
   --no-ssh-key \
   --output table
 
 echo ""
-echo "Step 5: Getting AKS credentials..."
+echo "Step 7: Getting AKS credentials..."
 az aks get-credentials \
   --resource-group "$RESOURCE_GROUP" \
   --name "$AKS_CLUSTER_NAME" \
   --overwrite-existing
 
 echo ""
-echo "Step 6: Verifying deployment..."
+echo "Step 8: Verifying deployment..."
 kubectl get nodes
 
 echo ""
@@ -111,6 +136,8 @@ echo ""
 echo "Resource Group: $RESOURCE_GROUP"
 echo "Storage Account: $STORAGE_ACCOUNT_NAME"
 echo "AKS Cluster: $AKS_CLUSTER_NAME"
+echo "Key Vault: $KEY_VAULT_NAME"
+echo "Container Registry: $ACR_NAME"
 echo ""
 
 # Get OIDC Issuer URL
@@ -121,6 +148,16 @@ echo ""
 # Get Kubelet Identity
 KUBELET_IDENTITY=$(az aks show -n "$AKS_CLUSTER_NAME" -g "$RESOURCE_GROUP" --query 'identityProfile.kubeletidentity.clientId' -o tsv)
 echo "Kubelet Identity Client ID: $KUBELET_IDENTITY"
+echo ""
+
+# Get ACR Login Server
+ACR_LOGIN_SERVER=$(az acr show -n "$ACR_NAME" --query 'loginServer' -o tsv)
+echo "ACR Login Server: $ACR_LOGIN_SERVER"
+echo ""
+
+# Get Key Vault URI
+KEY_VAULT_URI=$(az keyvault show -n "$KEY_VAULT_NAME" --query 'properties.vaultUri' -o tsv)
+echo "Key Vault URI: $KEY_VAULT_URI"
 echo ""
 
 # Determine repository root (one directory up from this script directory)
@@ -137,6 +174,10 @@ AKS_CLUSTER_NAME=$AKS_CLUSTER_NAME
 STORAGE_ACCOUNT_NAME=$STORAGE_ACCOUNT_NAME
 OIDC_ISSUER_URL=$OIDC_ISSUER
 KUBELET_IDENTITY_CLIENT_ID=$KUBELET_IDENTITY
+KEY_VAULT_NAME=$KEY_VAULT_NAME
+KEY_VAULT_URI=$KEY_VAULT_URI
+ACR_NAME=$ACR_NAME
+ACR_LOGIN_SERVER=$ACR_LOGIN_SERVER
 EOF
 echo "Outputs written to $OUTPUT_FILE"
 echo "You can source it with: export $(grep -v '^#' $OUTPUT_FILE | xargs)"

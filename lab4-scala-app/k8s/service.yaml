@@ -2,6 +2,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: aks-storage-app-scala-service
+  namespace: lab4
   labels:
     app: aks-storage-app-scala
 spec:

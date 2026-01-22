@@ -13,8 +13,10 @@ In this lab, you will deploy the necessary Azure infrastructure including an AKS
 You will deploy:
 - Resource Group
 - Azure Kubernetes Service (AKS) cluster with workload identity enabled
-- Azure Storage Account
-- Virtual Network (VNet) for AKS
+- Azure Storage Account with blob container
+- Azure Key Vault for secrets management
+- Azure Container Registry (ACR) for container images
+- Virtual Network (VNet) for AKS (auto-created)
 
 ## Step-by-Step Instructions
 
@@ -39,11 +41,13 @@ export RESOURCE_GROUP="rg-aks-storage-lab-wus3"
 export LOCATION="westus3"
 export AKS_CLUSTER_NAME="aks-storage-cluster"
 export STORAGE_ACCOUNT_NAME="aksstorage$(openssl rand -hex 4)"
+export KEY_VAULT_NAME="kv-aks-auth"
+export ACR_NAME="acraksauthlab"
 export NODE_COUNT=2
 ```
 
 
-**Note:** The storage account name must be globally unique, lowercase, and contain only alphanumeric characters.
+**Note:** The storage account name must be globally unique, lowercase, and contain only alphanumeric characters. Key Vault names must be 3-24 characters. ACR names must be alphanumeric only.
 
 ### 3. Create Resource Group
 
@@ -63,6 +67,8 @@ az deployment group create \
   --template-file deploy.bicep \
   --parameters aksClusterName=$AKS_CLUSTER_NAME \
   --parameters storageAccountName=$STORAGE_ACCOUNT_NAME \
+  --parameters keyVaultName=$KEY_VAULT_NAME \
+  --parameters acrName=$ACR_NAME \
   --parameters location=$LOCATION \
   --parameters nodeCount=$NODE_COUNT
 ```
@@ -81,6 +87,18 @@ Check that the storage account was created:
 
 ```bash
 az storage account list --resource-group $RESOURCE_GROUP --output table
+```
+
+Check that the Key Vault was created:
+
+```bash
+az keyvault list --resource-group $RESOURCE_GROUP --output table
+```
+
+Check that the Container Registry was created:
+
+```bash
+az acr list --resource-group $RESOURCE_GROUP --output table
 ```
 
 ### 6. Get AKS Credentials
@@ -125,13 +143,26 @@ After completing this lab, you will have:
    - Workload identity enabled (for Lab 2)
    - OIDC issuer enabled
    - System-assigned managed identity
+   - ACR attached for image pulls
 
 2. **Storage Account**
    - Standard_LRS replication
-   - Blob storage enabled
+   - Blob storage enabled with `data` container
    - Hot access tier
+   - TLS 1.2 minimum
 
-3. **Resource Group**
+3. **Key Vault**
+   - Standard SKU
+   - RBAC authorization enabled
+   - Soft delete enabled (90 days retention)
+   - For secure secrets management
+
+4. **Azure Container Registry (ACR)**
+   - Basic SKU
+   - Admin user disabled (uses managed identity)
+   - Attached to AKS for image pulls
+
+5. **Resource Group**
    - Contains all resources
    - Located in your specified region
 
@@ -148,12 +179,24 @@ echo "OIDC Issuer: $(az aks show -n $AKS_CLUSTER_NAME -g $RESOURCE_GROUP --query
 
 # Get the AKS managed identity client ID (needed for Lab 2)
 echo "Kubelet Identity: $(az aks show -n $AKS_CLUSTER_NAME -g $RESOURCE_GROUP --query 'identityProfile.kubeletidentity.clientId' -o tsv)"
+
+# Get the Key Vault URI
+echo "Key Vault URI: $(az keyvault show -n $KEY_VAULT_NAME --query 'properties.vaultUri' -o tsv)"
+
+# Get the ACR login server (needed for Lab 4)
+echo "ACR Login Server: $(az acr show -n $ACR_NAME --query 'loginServer' -o tsv)"
 ```
 
 ## Troubleshooting
 
 **Issue:** Storage account name already exists
 - **Solution:** The storage account name must be globally unique. Generate a new name with a random suffix.
+
+**Issue:** Key Vault name already exists
+- **Solution:** Key Vault names are globally unique and soft-deleted vaults retain the name. Use a different name or purge the deleted vault with `az keyvault purge --name <name>`.
+
+**Issue:** ACR name already exists
+- **Solution:** ACR names are globally unique. Choose a different alphanumeric name.
 
 **Issue:** AKS deployment fails with quota exceeded
 - **Solution:** Check your subscription quotas or try a different region.

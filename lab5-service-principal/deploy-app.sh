@@ -91,41 +91,25 @@ else
   echo "External IP pending. Check: kubectl get service $SERVICE_NAME -n $SERVICE_ACCOUNT_NAMESPACE"
 fi
 
-echo "Append outputs to env file..."
-{
-  echo ""; echo "# Lab 5 outputs - Service Principal app deployment";
-  echo "LAB5_DEPLOYMENT_NAME=$DEPLOYMENT_NAME";
-  echo "LAB5_SERVICE_NAME=$SERVICE_NAME";
-  echo "LAB5_NAMESPACE=$SERVICE_ACCOUNT_NAMESPACE";
-  [[ -n "$EXTERNAL_IP" ]] && echo "LAB5_EXTERNAL_IP=$EXTERNAL_IP";
-} >> "$LAB_ENV"
-echo "Outputs appended to $LAB_ENV"
+# Append Lab 5 app outputs to env file (avoid duplicates)
+if grep -q "# Lab 5 app outputs" "$LAB_ENV"; then
+  echo "Lab 5 app outputs already exist in $LAB_ENV. Skipping append."
+else
+  {
+    echo ""; echo "# Lab 5 app outputs - Service Principal application deployment";
+    echo "LAB5_APP_CONTAINER_NAME=$CONTAINER_NAME";
+    echo "LAB5_APP_DEPLOYMENT_NAME=$DEPLOYMENT_NAME";
+    echo "LAB5_APP_SERVICE_NAME=$SERVICE_NAME";
+    echo "LAB5_APP_NAMESPACE=$SERVICE_ACCOUNT_NAMESPACE";
+    [[ -n "$EXTERNAL_IP" ]] && echo "LAB5_APP_EXTERNAL_IP=$EXTERNAL_IP";
+  } >> "$LAB_ENV"
+  echo "Lab 5 app outputs appended to $LAB_ENV"
+fi
 
 rm -f /tmp/lab5-deployment.yaml /tmp/lab5-service.yaml
+echo ""
 echo "Done."
 echo ""
 echo "View pods:"
-echo "  kubectl get pods -l app=aks-storage-app-sp"
+echo "  kubectl get pods -l app=aks-storage-app-sp -n $SERVICE_ACCOUNT_NAMESPACE"
 echo ""
-
-# Append Lab 5 application outputs to the shared env file (repo root)
-# Remove old Lab 5 app outputs if they exist (more robust cleanup)
-grep -v "^# Lab 5 app outputs" "$LAB_ENV" | grep -v "^SP_CONTAINER_NAME=" | grep -v "^SP_APP_IMAGE=" | grep -v "^SP_APP_DEPLOYMENT_NAME=" | grep -v "^SP_APP_SERVICE_NAME=" | grep -v "^SP_APP_NAMESPACE=" | grep -v "^SP_APP_EXTERNAL_IP=" > "$LAB_ENV.tmp" && mv "$LAB_ENV.tmp" "$LAB_ENV"
-
-{
-    echo ""
-    echo "# Lab 5 app outputs - Service Principal application deployment"
-    echo "SP_CONTAINER_NAME=$CONTAINER_NAME"
-    echo "SP_APP_IMAGE=$APP_IMAGE"
-    echo "SP_APP_DEPLOYMENT_NAME=aks-storage-app-sp"
-    echo "SP_APP_SERVICE_NAME=aks-storage-app-sp-service"
-    echo "SP_APP_NAMESPACE=default"
-    if [ -n "$EXTERNAL_IP" ]; then
-        echo "SP_APP_EXTERNAL_IP=$EXTERNAL_IP"
-    fi
-} >> "$LAB_ENV"
-echo "Lab 5 application outputs appended to $LAB_ENV"
-echo ""
-
-# Clean up temp file
-rm -f /tmp/deployment-sp-temp.yaml

@@ -28,6 +28,8 @@ This lab is divided into five parts:
 Deploy the necessary Azure resources including:
 - Azure Kubernetes Service (AKS) cluster
 - Azure Storage Account
+- Azure Key Vault
+- Azure Container Registry (ACR)
 - Resource Group and networking components
 
 **Duration:** ~30 minutes
@@ -81,34 +83,35 @@ Alternative authentication approach using a service principal:
 ## Architecture
 
 ```
-┌─────────────────────────────────────────┐
-│           Azure Subscription             │
-│                                          │
-│  ┌────────────────────────────────────┐ │
-│  │         Resource Group              │ │
-│  │                                     │ │
-│  │  ┌──────────────┐  Managed Identity│ │
-│  │  │              │◄─────────────────┤ │
-│  │  │  AKS Cluster │                   │ │
-│  │  │              │                   │ │
-│  │  │  ┌────────┐  │                   │ │
-│  │  │  │  Pod   │  │  RBAC Roles      │ │
-│  │  │  │ Python │  │◄─────────┐       │ │
-│  │  │  │  App   │  │          │       │ │
-│  │  │  └────────┘  │          │       │ │
-│  │  └──────────────┘          │       │ │
-│  │                             │       │ │
-│  │  ┌──────────────────────┐  │       │ │
-│  │  │  Storage Account     │◄─┘       │ │
-│  │  │  - Blob Storage      │          │ │
-│  │  └──────────────────────┘          │ │
-│  └─────────────────────────────────────┘ │
-└──────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────┐
+│                      Azure Subscription                        │
+│                                                                │
+│  ┌──────────────────────────────────────────────────────────┐ │
+│  │                    Resource Group                         │ │
+│  │                                                           │ │
+│  │  ┌──────────────┐      ┌─────────────────┐               │ │
+│  │  │              │      │ Container       │               │ │
+│  │  │  AKS Cluster │◄─────┤ Registry (ACR)  │               │ │
+│  │  │              │ pull │                 │               │ │
+│  │  │  ┌────────┐  │      └─────────────────┘               │ │
+│  │  │  │  Pod   │  │                                        │ │
+│  │  │  │  App   │  │  Workload Identity                     │ │
+│  │  │  └────────┘  │◄─────────────────┐                     │ │
+│  │  └──────────────┘                  │                     │ │
+│  │         │                          │                     │ │
+│  │         │ RBAC                     │ RBAC                │ │
+│  │         ▼                          ▼                     │ │
+│  │  ┌──────────────────┐    ┌─────────────────┐            │ │
+│  │  │ Storage Account  │    │   Key Vault     │            │ │
+│  │  │  - Blob Storage  │    │   - Secrets     │            │ │
+│  │  └──────────────────┘    └─────────────────┘            │ │
+│  └──────────────────────────────────────────────────────────┘ │
+└───────────────────────────────────────────────────────────────┘
 ```
 
 ## Clean Up
 
-After completing the labs, remember to delete the Azure resources to avoid unnecessary charges. If you ran Lab 4, an Azure Container Registry may also exist. If you ran Lab 5, a service principal will also need to be cleaned up.
+After completing the labs, remember to delete the Azure resources to avoid unnecessary charges. The resource group contains all infrastructure (AKS, Storage, Key Vault, ACR). If you ran Lab 5, a service principal will also need to be cleaned up.
 
 ### Automated Cleanup (Recommended)
 
@@ -122,7 +125,7 @@ This script will:
 - Remove Kubernetes deployments and services (Labs 3, 4, & 5)
 - Delete service principal and federated credentials (Lab 5)
 - Delete managed identities and role assignments (Lab 2)
-- Delete the entire resource group including AKS cluster, Storage Account, and ACR (Labs 1 & 4)
+- Delete the entire resource group including AKS cluster, Storage Account, Key Vault, and ACR (Lab 1)
 
 The script automatically reads from `lab-outputs.env` if available, or prompts for the resource group name.
 
