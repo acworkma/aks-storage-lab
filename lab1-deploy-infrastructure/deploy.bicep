@@ -13,8 +13,20 @@ param nodeCount int = 2
 @description('VM size for AKS nodes')
 param nodeVmSize string = 'Standard_DS2_v2'
 
-@description('Kubernetes version')
-param kubernetesVersion string = '1.29.0'
+@description('Kubernetes version - defaults to a recent stable version')
+param kubernetesVersion string = '1.30.0'
+
+@description('Name of the Key Vault (must be globally unique, 3-24 chars)')
+param keyVaultName string
+
+@description('Name of the Azure Container Registry (must be globally unique, alphanumeric only)')
+param acrName string
+
+@description('Deploy Key Vault (set to false to skip)')
+param deployKeyVault bool = true
+
+@description('Deploy Azure Container Registry (set to false to skip)')
+param deployAcr bool = true
 
 // Create Storage Account
 resource storageAccount 'Microsoft.Storage/storageAccounts@2023-01-01' = {
@@ -43,6 +55,37 @@ resource container 'Microsoft.Storage/storageAccounts/blobServices/containers@20
   name: 'data'
   properties: {
     publicAccess: 'None'
+  }
+}
+
+// Create Key Vault for secrets management
+resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = if (deployKeyVault) {
+  name: keyVaultName
+  location: location
+  properties: {
+    sku: {
+      family: 'A'
+      name: 'standard'
+    }
+    tenantId: subscription().tenantId
+    enableRbacAuthorization: true
+    enableSoftDelete: true
+    softDeleteRetentionInDays: 90
+    enablePurgeProtection: true
+    publicNetworkAccess: 'Enabled'
+  }
+}
+
+// Create Azure Container Registry for container images
+resource acr 'Microsoft.ContainerRegistry/registries@2023-07-01' = if (deployAcr) {
+  name: acrName
+  location: location
+  sku: {
+    name: 'Basic'
+  }
+  properties: {
+    adminUserEnabled: false
+    publicNetworkAccess: 'Enabled'
   }
 }
 
@@ -88,6 +131,17 @@ resource aksCluster 'Microsoft.ContainerService/managedClusters@2023-10-01' = {
   }
 }
 
+// Grant AKS kubelet identity AcrPull role on ACR
+resource acrPullRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (deployAcr) {
+  name: guid(acr.id, aksCluster.id, '7f951dda-4ed3-4680-a7ca-43fe172d538d')
+  scope: acr
+  properties: {
+    principalId: aksCluster.properties.identityProfile.kubeletidentity.objectId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '7f951dda-4ed3-4680-a7ca-43fe172d538d') // AcrPull
+  }
+}
+
 // Outputs for use in subsequent labs
 output aksClusterName string = aksCluster.name
 output aksClusterFqdn string = aksCluster.properties.fqdn
@@ -97,3 +151,7 @@ output storageAccountId string = storageAccount.id
 output containerName string = container.name
 output kubeletIdentityClientId string = aksCluster.properties.identityProfile.kubeletidentity.clientId
 output kubeletIdentityObjectId string = aksCluster.properties.identityProfile.kubeletidentity.objectId
+output keyVaultName string = deployKeyVault ? keyVault!.name : ''
+output keyVaultUri string = deployKeyVault ? keyVault!.properties.vaultUri : ''
+output acrName string = deployAcr ? acr!.name : ''
+output acrLoginServer string = deployAcr ? acr!.properties.loginServer : ''
