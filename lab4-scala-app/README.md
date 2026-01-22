@@ -1,6 +1,6 @@
-# Lab 4: Scala Application with Azure Storage, ACR, and AKS Workload Identity
+# Lab 4: Scala Application with Azure Storage and AKS Workload Identity
 
-This lab builds and deploys a **Scala 3** application using **Akka HTTP** that securely accesses Azure Blob Storage via **AKS Workload Identity**. It now includes **automated Azure Container Registry (ACR) provisioning, image push, and cluster attachment** inside the deployment script.
+This lab builds and deploys a **Scala 3** application using **Akka HTTP** that securely accesses Azure Blob Storage via **AKS Workload Identity**.
 
 ## Overview
 
@@ -10,14 +10,13 @@ This lab builds and deploys a **Scala 3** application using **Akka HTTP** that s
 - **Azure SDK**: Java Azure SDK (azure-storage-blob, azure-identity)
 - **Container Runtime**: Microsoft OpenJDK 21
 - **Auth**: `DefaultAzureCredential` (Managed Identity in AKS)
-- **Container Registry**: Azure Container Registry (auto-created if not present)
 
 ## Prerequisites
 
-- Completed Lab 1 (AKS cluster + Storage Account)
+- Completed Lab 1 (AKS cluster, Storage Account, ACR)
 - Completed Lab 2 (Workload Identity configuration)
 - Docker installed
-- Azure CLI logged in (`az login`) for ACR automation
+- Azure CLI logged in (`az login`)
 - sbt installed (optional for local development)
 
 ## Application Features
@@ -51,24 +50,25 @@ lab4-scala-app/
 │           └── com/azure/aksstorage/
 │               └── Main.scala    # Main application code
 ├── k8s/
-│   ├── deployment.yaml       # Kubernetes deployment
-│   └── service.yaml          # LoadBalancer service
+│   ├── deployment.yaml       # Kubernetes deployment (namespace: lab4)
+│   └── service.yaml          # LoadBalancer service (namespace: lab4)
 ├── Dockerfile                # Multi-stage Docker build
 └── deploy-app.sh             # Deployment script
 ```
 ## Build the Application
 
-You can rely entirely on the deployment script for image build + registry push. Manual options are still available for advanced scenarios.
+You can rely entirely on the deployment script for image build + ACR push. Manual options are still available for advanced scenarios.
 
 ### Option 1 (Recommended): Automatic Build via Deploy Script
 
 ```bash
 bash lab4-scala-app/deploy-app.sh
 ```
-What happens if the image is missing:
+What happens:
 1. sbt compiles sources and produces a fat JAR via `sbt assembly`.
 2. Multi-stage Docker build assembles the runtime image.
-3. The image is tagged and pushed to ACR (auto-created unless disabled).
+3. The image is tagged and pushed to ACR (from Lab 1).
+4. Application is deployed to the `lab4` namespace.
 
 ### Option 2: Manual Docker Build
 
@@ -91,64 +91,59 @@ sbt compile
 sbt run   # Requires AZURE_STORAGE_ACCOUNT_NAME + optional AZURE_STORAGE_CONTAINER_NAME
 ```
 
-To skip registry work during iterating locally:
-```bash
-CREATE_ACR=false ATTACH_ACR=false bash lab4-scala-app/deploy-app.sh
-```
-
 ## Deploy to AKS
 
-### Automatic Deployment (ACR + Workload Identity)
+### Automatic Deployment
 
 ```bash
 bash lab4-scala-app/deploy-app.sh
 ```
 
-Script workflow (current version):
+Script workflow:
 1. Source env from `lab-outputs.env` (Labs 1–2 outputs).
-2. Derive or use provided `ACR_NAME` (e.g. `rgaksstoragelabwus3acr`).
-3. Create ACR if missing (`CREATE_ACR=true` default).
-4. Build image if absent locally.
-5. Tag and push image: `<loginServer>/aks-storage-app-scala:<tag>`.
-6. Attach ACR to AKS (`ATTACH_ACR=true` default) for pull permissions.
-7. Substitute manifest values (service account, storage account, image ref, pull policy).
-8. Deploy + wait for rollout.
-9. Wait for LoadBalancer external IP.
-10. Append outputs (including ACR info) to `lab-outputs.env`.
+2. Build Docker image (sbt compilation + assembly).
+3. Login to ACR and push image.
+4. Attach ACR to AKS for pull permissions.
+5. Substitute manifest values (service account, storage account, container name, image ref).
+6. Deploy to `lab4` namespace + wait for rollout.
+7. Wait for LoadBalancer external IP.
+8. Append outputs to `lab-outputs.env`.
 
-Key environment overrides:
+Environment overrides:
 | Variable | Purpose | Default |
 |----------|---------|---------|
-| `ACR_NAME` | Explicit ACR name | Derived from RG if empty |
-| `CREATE_ACR` | Skip or allow creation | `true` |
-| `ATTACH_ACR` | Attach ACR to AKS | `true` |
 | `SCALA_APP_IMAGE_TAG` | Image tag | `latest` |
-| `SCALA_APP_IMAGE` | Full image ref override | Built dynamically |
+| `CONTAINER_NAME` | Blob container name | `data` |
 
 To deploy with a custom tag:
 ```bash
 export SCALA_APP_IMAGE_TAG=v2
 bash lab4-scala-app/deploy-app.sh
 ```
+
 ### Manual Deployment (Advanced)
 
 Use this if you want full manual control (CI/CD pipelines, custom images):
 
 ```bash
+# Source environment
+source lab-outputs.env
+
+# Build and push
 docker build -t aks-storage-app-scala:latest lab4-scala-app/
-ACR_NAME=<your-acr>
 az acr login -n $ACR_NAME
-docker tag aks-storage-app-scala:latest $ACR_NAME.azurecr.io/aks-storage-app-scala:manual
-docker push $ACR_NAME.azurecr.io/aks-storage-app-scala:manual
+docker tag aks-storage-app-scala:latest $ACR_LOGIN_SERVER/aks-storage-app-scala:manual
+docker push $ACR_LOGIN_SERVER/aks-storage-app-scala:manual
 
+# Deploy
 sed -e "s/<your-storage-account-name>/$STORAGE_ACCOUNT_NAME/g" \
-  -e "s|image: aks-storage-app-scala:latest|image: $ACR_NAME.azurecr.io/aks-storage-app-scala:manual|g" \
-  -e "s/imagePullPolicy: Never/imagePullPolicy: Always/g" \
-  lab4-scala-app/k8s/deployment.yaml > /tmp/deployment-scala.yaml
+    -e "s/<your-container-name>/$CONTAINER_NAME/g" \
+    -e "s|image: aks-storage-app-scala:latest|image: $ACR_LOGIN_SERVER/aks-storage-app-scala:manual|g" \
+    -e "s/imagePullPolicy: Never/imagePullPolicy: Always/g" \
+    lab4-scala-app/k8s/deployment.yaml | kubectl apply -f -
 
-kubectl apply -f /tmp/deployment-scala.yaml
 kubectl apply -f lab4-scala-app/k8s/service.yaml
-kubectl rollout status deployment/aks-storage-app-scala --timeout=300s
+kubectl rollout status deployment/aks-storage-app-scala -n lab4 --timeout=300s
 ```
 
 ## Test the Application
@@ -156,7 +151,7 @@ kubectl rollout status deployment/aks-storage-app-scala --timeout=300s
 Once deployed, get the external IP:
 
 ```bash
-kubectl get service aks-storage-app-scala-service
+kubectl get service aks-storage-app-scala-service -n lab4
 ```
 
 Test endpoints:
@@ -180,8 +175,8 @@ curl -X POST http://<EXTERNAL-IP>/upload
 Check that Azure environment variables are injected:
 
 ```bash
-POD=$(kubectl get pod -l app=aks-storage-app-scala -o jsonpath='{.items[0].metadata.name}')
-kubectl exec $POD -- env | grep AZURE
+POD=$(kubectl get pod -l app=aks-storage-app-scala -n lab4 -o jsonpath='{.items[0].metadata.name}')
+kubectl exec $POD -n lab4 -- env | grep AZURE
 ```
 
 You should see:
@@ -192,7 +187,7 @@ You should see:
 ## View Logs
 
 ```bash
-kubectl logs -l app=aks-storage-app-scala --tail=50 -f
+kubectl logs -l app=aks-storage-app-scala -n lab4 --tail=50 -f
 ```
 
 ## Troubleshooting
@@ -220,15 +215,15 @@ docker images | grep aks-storage-app-scala
 
 **Problem**: Pods stuck in `ImagePullBackOff`
 ```bash
-kubectl describe pod <pod-name> | grep -i backoff
+kubectl describe pod <pod-name> -n lab4 | grep -i backoff
 ```
 Cause: Image reference points to ACR but permissions not attached or image not pushed.
 Fix:
 ```bash
-bash lab4-scala-app/deploy-app.sh              # Re-run (ensures push + attach)
+bash lab4-scala-app/deploy-app.sh              # Re-run
 # OR manual:
 az acr login -n $ACR_NAME
-docker push $SCALA_APP_IMAGE
+docker push $ACR_LOGIN_SERVER/aks-storage-app-scala:latest
 az aks update -n $AKS_CLUSTER_NAME -g $RESOURCE_GROUP --attach-acr $ACR_NAME
 ```
 
@@ -236,15 +231,15 @@ az aks update -n $AKS_CLUSTER_NAME -g $RESOURCE_GROUP --attach-acr $ACR_NAME
 Cause: Deployment still uses `imagePullPolicy: Never` with a registry image.
 Fix: Ensure deploy script has updated manifest or manually patch:
 ```bash
-kubectl patch deployment aks-storage-app-scala \
+kubectl patch deployment aks-storage-app-scala -n lab4 \
   --type=strategic -p '{"spec":{"template":{"spec":{"containers":[{"name":"app","imagePullPolicy":"Always"}]}}}}'
 ```
 
 **Problem**: Pods crash with authentication errors
 ```bash
 # Verify workload identity is configured
-kubectl describe pod -l app=aks-storage-app-scala | grep -A5 "azure.workload.identity"
-kubectl get serviceaccount workload-identity-sa -o yaml
+kubectl describe pod -l app=aks-storage-app-scala -n lab4 | grep -A5 "azure.workload.identity"
+kubectl get serviceaccount workload-identity-sa -n lab4 -o yaml
 ```
 
 ### Akka-specific Issues
@@ -270,22 +265,13 @@ kubectl get serviceaccount workload-identity-sa -o yaml
 
 ```bash
 az acr login --name $ACR_NAME
-docker push $ACR_NAME.azurecr.io/aks-storage-app-scala:v1
+docker push $ACR_LOGIN_SERVER/aks-storage-app-scala:v1
 ```
-### Container Registry
 
-The deployment script now manages this automatically (create, push, attach). Override behavior:
-```bash
-ACR_NAME=myexistingacr CREATE_ACR=false ATTACH_ACR=true bash lab4-scala-app/deploy-app.sh
-```
-Custom tag:
+### Custom Image Tag
+
 ```bash
 SCALA_APP_IMAGE_TAG=v3 bash lab4-scala-app/deploy-app.sh
-```
-Full image override (skip build):
-```bash
-export SCALA_APP_IMAGE=myacr.azurecr.io/aks-storage-app-scala:prebuilt
-CREATE_ACR=false ATTACH_ACR=false bash lab4-scala-app/deploy-app.sh
 ```
 
 ### JVM Tuning
@@ -329,40 +315,40 @@ kubectl delete -f lab4-scala-app/k8s/deployment.yaml
 kubectl delete -f lab4-scala-app/k8s/service.yaml
 ```
 
+Or delete by namespace resources:
+```bash
+kubectl delete deployment aks-storage-app-scala -n lab4
+kubectl delete service aks-storage-app-scala-service -n lab4
+```
+
 ## Quick Commands
 
 ```bash
 # Redeploy with new tag
 SCALA_APP_IMAGE_TAG=v2 bash lab4-scala-app/deploy-app.sh
 
-# Skip ACR creation (existing registry)
-ACR_NAME=myacr CREATE_ACR=false bash lab4-scala-app/deploy-app.sh
+# Check deployment status
+kubectl get pods -l app=aks-storage-app-scala -n lab4
 
-# Local iteration (no registry ops)
-CREATE_ACR=false ATTACH_ACR=false bash lab4-scala-app/deploy-app.sh
+# View logs
+kubectl logs -l app=aks-storage-app-scala -n lab4 --tail=50
 
-# Force image override
-SCALA_APP_IMAGE=myacr.azurecr.io/aks-storage-app-scala:test bash lab4-scala-app/deploy-app.sh
+# Get external IP
+kubectl get service aks-storage-app-scala-service -n lab4
 ```
 
 ## Environment Outputs
 
 After deployment, `lab-outputs.env` gains:
 ```
+SCALA_APP_NAMESPACE=lab4
+SCALA_CONTAINER_NAME=data
 SCALA_APP_IMAGE=<full-acr-image>
-ACR_NAME=<derived-or-custom>
-ACR_LOGIN_SERVER=<acr-login-server>
+SCALA_APP_DEPLOYMENT_NAME=aks-storage-app-scala
+SCALA_APP_SERVICE_NAME=aks-storage-app-scala-service
 SCALA_APP_EXTERNAL_IP=<ip-if-assigned>
 ```
 Use these for subsequent automation or comparisons.
-
-## Optional ACR Removal
-
-Only if this registry is lab-specific and not reused elsewhere:
-```bash
-az acr delete -n $ACR_NAME -g $RESOURCE_GROUP
-```
-Warning: Removing ACR will break pulls for any workloads using its images.
 
 ## Next Steps
 

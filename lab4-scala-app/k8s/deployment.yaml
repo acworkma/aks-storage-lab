@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: aks-storage-app-scala
+  namespace: lab4
   labels:
     app: aks-storage-app-scala
     language: scala
@@ -29,9 +30,9 @@ spec:
           name: http
         env:
         - name: AZURE_STORAGE_ACCOUNT_NAME
-          value: "<your-storage-account-name>"  # REQUIRED: Update with your storage account name
+          value: "<your-storage-account-name>"  # Substituted by deploy script
         - name: AZURE_STORAGE_CONTAINER_NAME
-          value: "data"
+          value: "<your-container-name>"  # Substituted by deploy script
         # These are automatically injected by workload identity
         # - AZURE_CLIENT_ID
         # - AZURE_TENANT_ID
