@@ -20,8 +20,10 @@ fi
 
 # Additional variables for this lab
 MANAGED_IDENTITY_NAME="id-aks-storage"
-SERVICE_ACCOUNT_NAMESPACE="default"
 SERVICE_ACCOUNT_NAME="workload-identity-sa"
+
+# Namespaces for all labs that need workload identity
+LAB_NAMESPACES=("lab3" "lab4" "lab5")
 
 # Get location from resource group (Lab 1 env doesn't export LOCATION)
 LOCATION=$(az group show --name "$RESOURCE_GROUP" --query location -o tsv)
@@ -48,7 +50,8 @@ echo "  Storage Account: $STORAGE_ACCOUNT_NAME"
 echo "  Key Vault: $KEY_VAULT_NAME"
 echo "  Container Registry: $ACR_NAME"
 echo "  Managed Identity: $MANAGED_IDENTITY_NAME"
-echo "  Service Account: $SERVICE_ACCOUNT_NAMESPACE/$SERVICE_ACCOUNT_NAME"
+echo "  Service Account Name: $SERVICE_ACCOUNT_NAME"
+echo "  Lab Namespaces: ${LAB_NAMESPACES[*]}"
 echo ""
 
 # Check if Azure CLI is installed
@@ -177,34 +180,46 @@ echo "  5c: AcrPush on Container Registry..."
 assign_role "AcrPush" "$USER_ASSIGNED_CLIENT_ID" "$ACR_ID" "ACR"
 
 echo ""
-echo "Step 6: Creating Kubernetes Service Account..."
-cat <<EOF | kubectl apply -f -
+echo "Step 6: Creating Kubernetes namespaces and service accounts for all labs..."
+for NS in "${LAB_NAMESPACES[@]}"; do
+  echo ""
+  echo "  Creating namespace: $NS"
+  kubectl create namespace "$NS" --dry-run=client -o yaml | kubectl apply -f -
+  
+  echo "  Creating service account: $SERVICE_ACCOUNT_NAME in $NS"
+  cat <<EOF | kubectl apply -f -
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   annotations:
     azure.workload.identity/client-id: $USER_ASSIGNED_CLIENT_ID
   name: $SERVICE_ACCOUNT_NAME
-  namespace: $SERVICE_ACCOUNT_NAMESPACE
+  namespace: $NS
 EOF
+done
 
 echo ""
-echo "Step 7: Creating Federated Identity Credential..."
-if az identity federated-credential show \
-  --name "aks-federated-credential" \
-  --identity-name "$MANAGED_IDENTITY_NAME" \
-  --resource-group "$RESOURCE_GROUP" &>/dev/null; then
-  echo "  Federated credential already exists. Skipping creation."
-else
-  az identity federated-credential create \
-    --name "aks-federated-credential" \
+echo "Step 7: Creating Federated Identity Credentials for all namespaces..."
+for NS in "${LAB_NAMESPACES[@]}"; do
+  CRED_NAME="aks-federated-credential-$NS"
+  echo ""
+  echo "  Creating federated credential: $CRED_NAME"
+  if az identity federated-credential show \
+    --name "$CRED_NAME" \
     --identity-name "$MANAGED_IDENTITY_NAME" \
-    --resource-group "$RESOURCE_GROUP" \
-    --issuer "$AKS_OIDC_ISSUER" \
-    --subject "system:serviceaccount:${SERVICE_ACCOUNT_NAMESPACE}:${SERVICE_ACCOUNT_NAME}" \
-    --audience "api://AzureADTokenExchange" \
-    --output table
-fi
+    --resource-group "$RESOURCE_GROUP" &>/dev/null; then
+    echo "    Federated credential already exists. Skipping."
+  else
+    az identity federated-credential create \
+      --name "$CRED_NAME" \
+      --identity-name "$MANAGED_IDENTITY_NAME" \
+      --resource-group "$RESOURCE_GROUP" \
+      --issuer "$AKS_OIDC_ISSUER" \
+      --subject "system:serviceaccount:${NS}:${SERVICE_ACCOUNT_NAME}" \
+      --audience "api://AzureADTokenExchange" \
+      --output table
+  fi
+done
 
 echo ""
 echo "Step 8: Verifying configuration..."
@@ -224,8 +239,11 @@ az role assignment list \
   --output table
 
 echo ""
-echo "Kubernetes Service Account:"
-kubectl get serviceaccount "$SERVICE_ACCOUNT_NAME" -n "$SERVICE_ACCOUNT_NAMESPACE"
+echo "Kubernetes Service Accounts:"
+for NS in "${LAB_NAMESPACES[@]}"; do
+  echo "  Namespace: $NS"
+  kubectl get serviceaccount "$SERVICE_ACCOUNT_NAME" -n "$NS" 2>/dev/null || echo "    Not found"
+done
 
 echo ""
 echo "================================================="
@@ -237,6 +255,7 @@ echo ""
 echo "AZURE_CLIENT_ID=$USER_ASSIGNED_CLIENT_ID"
 echo "SERVICE_ACCOUNT_NAME=$SERVICE_ACCOUNT_NAME"
 echo "MANAGED_IDENTITY_NAME=$MANAGED_IDENTITY_NAME"
+echo "LAB_NAMESPACES=${LAB_NAMESPACES[*]}"
 echo ""
 echo "Roles assigned:"
 echo "  - Storage Blob Data Contributor on $STORAGE_ACCOUNT_NAME"
@@ -256,7 +275,6 @@ else
     echo "# Lab 2 outputs - Managed Identity configuration"
     echo "AZURE_CLIENT_ID=$USER_ASSIGNED_CLIENT_ID"
     echo "SERVICE_ACCOUNT_NAME=$SERVICE_ACCOUNT_NAME"
-    echo "SERVICE_ACCOUNT_NAMESPACE=$SERVICE_ACCOUNT_NAMESPACE"
     echo "MANAGED_IDENTITY_NAME=$MANAGED_IDENTITY_NAME"
   } >> "$LAB_ENV"
   echo "Lab 2 outputs appended to $LAB_ENV"
@@ -266,4 +284,7 @@ echo ""
 echo "Note: Workload identity may take a few minutes to fully propagate."
 echo ""
 echo "Next step: Proceed to Lab 3 to deploy the sample application"
+echo "  - Lab 3 uses namespace: lab3"
+echo "  - Lab 4 uses namespace: lab4"
+echo "  - Lab 5 uses namespace: lab5"
 echo ""
