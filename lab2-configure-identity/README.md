@@ -13,14 +13,16 @@ In this lab, you will configure Azure managed identity to allow your AKS pods to
 You will:
 1. Create a user-assigned managed identity
 2. Assign RBAC roles to the identity for Storage, Key Vault, and ACR
-3. Create Kubernetes namespaces for labs 3, 4, and 5
+3. Create Kubernetes namespaces for labs 3 and 4
 4. Create a Kubernetes service account in each namespace linked to the managed identity
 5. Create federated identity credentials for each namespace
+
+> **Note**: Lab 5 uses an independent Service Principal authentication path and does not require Lab 2. You can run Lab 5 directly after Lab 1.
 
 ## Architecture
 
 ```
-Pod with Service Account (in lab3, lab4, or lab5 namespace)
+Pod with Service Account (in lab3 or lab4 namespace)
         ↓ (uses)
 Kubernetes Service Account (workload-identity-sa)
         ↓ (federated with)
@@ -50,8 +52,8 @@ export ACR_NAME="acraksauthlab"
 export MANAGED_IDENTITY_NAME="id-aks-storage"
 export SERVICE_ACCOUNT_NAME="workload-identity-sa"
 
-# Namespaces for all labs
-LAB_NAMESPACES=("lab3" "lab4" "lab5")
+# Namespaces for labs using managed identity (Lab 5 is independent)
+LAB_NAMESPACES=("lab3" "lab4")
 
 # Location is derived from resource group
 export LOCATION=$(az group show --name $RESOURCE_GROUP --query location -o tsv)
@@ -294,11 +296,12 @@ Proceed to [Lab 3: Deploy Sample Application](../lab3-sample-app/) to deploy a P
 Each lab uses its own namespace:
 - **Lab 3** (Python app): `lab3` namespace
 - **Lab 4** (Scala app): `lab4` namespace
-- **Lab 5** (Service Principal): `lab5` namespace
+
+> **Note**: Lab 5 (Service Principal) is an independent path that doesn't require Lab 2. You can run Lab 5 directly after Lab 1.
 
 ## Clean Up
 
-To remove the managed identity configuration (keep this if continuing to Labs 3-5):
+To remove the managed identity configuration (keep this if continuing to Labs 3-4):
 
 ```bash
 # Delete federated credentials

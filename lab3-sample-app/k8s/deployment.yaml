@@ -34,7 +34,7 @@ spec:
         - name: AZURE_STORAGE_ACCOUNT_NAME
           value: "<your-storage-account-name>"  # deploy-app.sh substitutes this
         - name: AZURE_STORAGE_CONTAINER_NAME
-          value: "data"
+          value: "<your-container-name>"  # deploy-app.sh substitutes this
         # These are automatically injected by workload identity webhook:
         # - AZURE_CLIENT_ID
         # - AZURE_TENANT_ID

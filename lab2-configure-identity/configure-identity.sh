@@ -22,8 +22,9 @@ fi
 MANAGED_IDENTITY_NAME="id-aks-storage"
 SERVICE_ACCOUNT_NAME="workload-identity-sa"
 
-# Namespaces for all labs that need workload identity
-LAB_NAMESPACES=("lab3" "lab4" "lab5")
+# Namespaces for labs that use workload identity with managed identity
+# Note: Lab 5 is independent and creates its own namespace/service account
+LAB_NAMESPACES=("lab3" "lab4")
 
 # Get location from resource group (Lab 1 env doesn't export LOCATION)
 LOCATION=$(az group show --name "$RESOURCE_GROUP" --query location -o tsv)
@@ -283,8 +284,10 @@ echo ""
 
 echo "Note: Workload identity may take a few minutes to fully propagate."
 echo ""
-echo "Next step: Proceed to Lab 3 to deploy the sample application"
-echo "  - Lab 3 uses namespace: lab3"
-echo "  - Lab 4 uses namespace: lab4"
-echo "  - Lab 5 uses namespace: lab5"
+echo "Next step: Proceed to Lab 3 or Lab 4 to deploy sample applications"
+echo "  - Lab 3 (Python) uses namespace: lab3"
+echo "  - Lab 4 (Scala) uses namespace: lab4"
+echo ""
+echo "Note: Lab 5 is an independent path using Service Principal authentication."
+echo "      You can run Lab 5 directly after Lab 1 without running Lab 2."
 echo ""

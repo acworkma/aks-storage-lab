@@ -25,7 +25,7 @@ fi
 APP_NAMESPACE="lab3"
 APP_NAME="aks-storage-app-python"
 APP_IMAGE_TAG="${APP_IMAGE_TAG:-v1}"
-CONTAINER_NAME="data"
+CONTAINER_NAME="${CONTAINER_NAME:-data}"
 
 echo "================================================"
 echo "AKS Storage Lab - Deploy Sample Application"
@@ -86,6 +86,7 @@ echo "Step 5: Applying Kubernetes manifests..."
 # Substitute placeholders and apply deployment
 sed -e "s|image: aks-storage-app-python:latest|image: $ACR_IMAGE|g" \
     -e "s/<your-storage-account-name>/$STORAGE_ACCOUNT_NAME/g" \
+    -e "s/<your-container-name>/$CONTAINER_NAME/g" \
     -e "s/serviceAccountName: workload-identity-sa/serviceAccountName: $SERVICE_ACCOUNT_NAME/g" \
     "$K8S_DIR/deployment.yaml" | kubectl apply -f -
 
@@ -157,6 +158,7 @@ else
       echo ""
       echo "# Lab 3 outputs - Sample application deployment"
       echo "LAB3_NAMESPACE=$APP_NAMESPACE"
+      echo "LAB3_CONTAINER_NAME=$CONTAINER_NAME"
       echo "LAB3_APP_IMAGE=$ACR_IMAGE"
       echo "LAB3_APP_DEPLOYMENT_NAME=aks-storage-app"
       echo "LAB3_APP_SERVICE_NAME=aks-storage-app-service"
